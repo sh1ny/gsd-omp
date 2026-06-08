@@ -15,6 +15,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import installProfiles = require('./install-profiles.cjs');
 const {
@@ -284,7 +285,7 @@ function convertedAgentsKind(destSubpath: string, prefix: string, converterName:
         ? readOverrides(configDir)
         : null;
       const src = stageAgentsForProfile(findAgentsSourceRoot(configDir), resolved);
-      const dest = fs.mkdtempSync(path.join(_require('node:os').tmpdir(), 'gsd-omp-agents-'));
+      const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-omp-agents-'));
       if (!fs.existsSync(src)) return dest;
       for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
         if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
@@ -306,7 +307,7 @@ function rulesKind(destSubpath: string, prefix: string, configDir: string): Arti
     prefix,
     stage: () => {
       const rulesDir = path.resolve(findInstallSourceRoot(configDir), '..', '..', 'gsd-core', 'omp', 'rules');
-      const dest = fs.mkdtempSync(path.join(_require('node:os').tmpdir(), 'gsd-omp-rules-'));
+      const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-omp-rules-'));
       if (!fs.existsSync(rulesDir)) return dest;
       for (const entry of fs.readdirSync(rulesDir, { withFileTypes: true })) {
         if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
@@ -325,7 +326,7 @@ function extensionsKind(destSubpath: string, prefix: string, configDir: string):
     prefix,
     stage: () => {
       const extensionsDir = path.resolve(findInstallSourceRoot(configDir), '..', '..', 'gsd-core', 'omp', 'extensions');
-      const dest = fs.mkdtempSync(path.join(_require('node:os').tmpdir(), 'gsd-omp-extensions-'));
+      const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-omp-extensions-'));
       if (!fs.existsSync(extensionsDir)) return dest;
       for (const entry of fs.readdirSync(extensionsDir, { withFileTypes: true })) {
         if (!entry.isDirectory() || entry.name.startsWith('.') || !entry.name.startsWith(prefix)) continue;
