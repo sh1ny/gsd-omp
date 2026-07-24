@@ -97,7 +97,7 @@
   "agents/subagents/gsd-ui-researcher.yaml": "15e215874bc2c37d",
   "agents/subagents/gsd-user-profiler.md": "c16f94e09e433394",
   "agents/subagents/gsd-user-profiler.yaml": "645826a29d079159",
-  "agents/subagents/gsd-verifier.md": "862e8f8dcb059014",
+  "agents/subagents/gsd-verifier.md": "da78cda2375db8d7",
   "agents/subagents/gsd-verifier.yaml": "2d2bd6b37626f382",
   "gsd-core/.gsd-runtime": "cb556f5d5cee2779",
   "gsd-core/VERSION": "ef0deccd81a6723c",

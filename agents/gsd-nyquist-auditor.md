@@ -10,6 +10,8 @@ tools:
   - Grep
   - Skill
 color: purple
+model: @smol
+thinkingLevel: max
 ---
 
 <role>

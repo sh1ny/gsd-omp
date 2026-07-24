@@ -3,6 +3,8 @@ name: gsd-planner
 description: Creates executable phase plans with task breakdown, dependency analysis, and goal-backward verification. Spawned by /gsd:plan-phase orchestrator.
 tools: Read, Write, Edit, Bash, Glob, Grep, Skill, WebFetch, mcp__context7__*, mcp__plugin_context7_context7__*
 color: green
+model: @plan
+thinkingLevel: high
 # hooks:
 #   PostToolUse:
 #     - matcher: "Write|Edit"

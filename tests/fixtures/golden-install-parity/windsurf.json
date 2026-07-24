@@ -34,7 +34,7 @@
   "agents/gsd-ui-checker.md": "56698909c270b130",
   "agents/gsd-ui-researcher.md": "c348aa3ff8412ecb",
   "agents/gsd-user-profiler.md": "622220df0654b6bf",
-  "agents/gsd-verifier.md": "4c43a4929c6f8013",
+  "agents/gsd-verifier.md": "e4908dca0ec5853f",
   "gsd-core/.gsd-runtime": "fe100af8906532d6",
   "gsd-core/VERSION": "ef0deccd81a6723c",
   "gsd-core/bin/check-latest-version.cjs": "e4a224058c8f4d74",

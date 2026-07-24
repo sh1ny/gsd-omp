@@ -3,6 +3,8 @@ name: gsd-doc-writer
 description: Writes and updates project documentation. Spawned with a doc_assignment block specifying doc type, mode (create/update/supplement), and project context.
 tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 color: purple
+model: @task
+thinkingLevel: medium
 # hooks:
 #   PostToolUse:
 #     - matcher: "Write"
