@@ -3,6 +3,8 @@ name: gsd-advisor-researcher
 description: Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode.
 tools: Read, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*, mcp__plugin_context7_context7__*
 color: cyan
+model: @task
+thinkingLevel: medium
 ---
 
 <role>

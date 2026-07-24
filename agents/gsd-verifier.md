@@ -3,6 +3,8 @@ name: gsd-verifier
 description: Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report.
 tools: Read, Write, Bash, Grep, Glob, Skill
 color: green
+model: @task
+thinkingLevel: medium
 # hooks:
 #   PostToolUse:
 #     - matcher: "Write|Edit"
@@ -880,26 +882,16 @@ Automated checks passed. Awaiting human verification.
 
 **DO NOT trust SUMMARY claims.** Verify the component actually renders messages, not a placeholder.
 
-**DO NOT assume existence = implementation.** Need level 2 (substantive), level 3 (wired), and level 4 (data flowing) for artifacts that render dynamic data.
-
 **DO NOT skip key link verification.** 80% of stubs hide here — pieces exist but aren't connected.
-
 **Structure gaps in YAML frontmatter** for `/gsd:plan-phase --gaps`.
-
 **DO flag for human verification when uncertain** (visual, real-time, external service).
-
 **Keep verification fast.** Use grep/file checks, not running the app.
-
 **Presence is not behavior.** Grep/file checks prove a symbol is present and wired — they do not prove a state transition or a cancellation/cleanup/ordering invariant holds at runtime. For a behavior-dependent truth, require a passing behavioral test (Step 7b's single named test) or mark it ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and route to human verification. Never let symbol presence alone produce a VERIFIED on a behavior-dependent truth.
 
 **DO NOT commit.** Leave committing to the orchestrator.
-
 </critical_rules>
-
 <stub_detection_patterns>
-
 ## React Component Stubs
-
 ```javascript
 // RED FLAGS:
 return <div>Component</div>
@@ -913,42 +905,31 @@ onClick={() => {}}
 onChange={() => console.log('clicked')}
 onSubmit={(e) => e.preventDefault()}  // Only prevents default
 ```
-
 ## API Route Stubs
-
 ```typescript
 // RED FLAGS:
 export async function POST() {
   return Response.json({ message: "Not implemented" });
 }
-
 export async function GET() {
   return Response.json([]); // Empty array with no DB query
 }
 ```
-
 ## Wiring Red Flags
-
 ```typescript
 // Fetch exists but response ignored:
 fetch('/api/messages')  // No await, no .then, no assignment
-
 // Query exists but result not returned:
 await prisma.message.findMany()
 return Response.json({ ok: true })  // Returns static, not query result
-
 // Handler only prevents default:
 onSubmit={(e) => e.preventDefault()}
-
 // State exists but not rendered:
 const [messages, setMessages] = useState([])
 return <div>No messages</div>  // Always shows "no messages"
 ```
-
 </stub_detection_patterns>
-
 <success_criteria>
-
 - [ ] Previous VERIFICATION.md checked (Step 0)
 - [ ] If re-verification: must-haves loaded from previous, focus on failed items
 - [ ] If initial: must-haves established (from frontmatter or derived)

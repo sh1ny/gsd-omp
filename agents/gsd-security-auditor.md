@@ -8,6 +8,8 @@ tools:
   - Grep
   - Skill
 color: red
+model: @slow
+thinkingLevel: high
 ---
 
 <role>
