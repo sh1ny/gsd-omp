@@ -6,9 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Status display moved from the status line to a right-aligned widget above the editor
+- Context percentage indicator now color-coded: muted below 65%, warning 65-74%, error at or above 75%
+- Update prompt label changed from `/gsd:update` to `/gsd-update`
+- Phase display format changed from "Phase N stage" to "P N stage"
+- Status widget auto-hides when there is no content and clears on session shutdown
+- Let me write these out concisely.
+- </think>
+- Status bar moved from the status line to a right-aligned widget above the editor
+- Context percentage indicator is now color-coded (muted below 65%, warning 65–74%, error at or above 75%)
+- Update prompt label changed from `/gsd:update` to `/gsd-update` (hyphen form)
+- Active phase display now shown as `P N stage` instead of `Phase N stage`
+- Status widget auto-hides when empty and clears on session shutdown; falls back to the legacy status line when the widget API is unavailable
+
 ### Removed
+
 - GSD fork restricted to OMP-only runtime. Removed 19 non-OMP runtime capability descriptors (claude, codex, opencode, pi, cursor, windsurf, kilo, kimi, kimi-code, antigravity, augment, cline, codebuddy, copilot, hermes, qwen, trae, vscode, zcode) and the claude-orchestration feature capability. Deleted gsd-mcp-server, hooks tree, generated skills artifact, and per-harness packaging directories (.claude-plugin, .opencode, .kilo, pi, vscode)
 - Hardened runtime selection: explicit non-omp values via `GSD_RUNTIME`, `.planning/config.json` runtime field, or removed `--<runtime>` CLI flags now hard-error with `this GSD fork supports OMP only`; omitted values default to `omp`. Migration: reinstall with `gsd-core --omp`
+
 ## [1.8.0] - 2026-07-22
 
 ### Added

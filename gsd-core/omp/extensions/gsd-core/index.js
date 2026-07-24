@@ -52,6 +52,62 @@ const queuedContext = [];
 let configWatchers = [];
 const contextWarningState = { callsSinceWarn: 0, lastLevel: null, criticalRecorded: false };
 
+// --- Status widget (right-aligned above-editor band) ---
+const STATUS_WIDGET_KEY = 'gsd-status';
+let statusComponent = null;
+let statusComponentUi = null;
+
+function stripAnsi(str) {
+  return String(str).replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function visibleWidthApprox(str) {
+  const s = stripAnsi(str);
+  let width = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    if (cp == null) continue;
+    if (
+      (cp >= 0x300 && cp <= 0x36f) ||
+      (cp >= 0x20d0 && cp <= 0x20ff) ||
+      (cp >= 0xfe00 && cp <= 0xfe0f) ||
+      (cp >= 0xfe20 && cp <= 0xfe2f)
+    ) {
+      continue;
+    }
+    if (
+      (cp >= 0x1100 && cp <= 0x115f) ||
+      (cp >= 0x2e80 && cp <= 0xa4cf && !(cp >= 0xa600 && cp <= 0xa60c)) ||
+      (cp >= 0xa960 && cp <= 0xa97f) ||
+      (cp >= 0xac00 && cp <= 0xd7a3) ||
+      (cp >= 0xf900 && cp <= 0xfaff) ||
+      (cp >= 0xfe30 && cp <= 0xfe6f) ||
+      (cp >= 0xff00 && cp <= 0xff60) ||
+      (cp >= 0xffe0 && cp <= 0xffe6) ||
+      (cp >= 0x1f300 && cp <= 0x1faff) ||
+      (cp >= 0x20000 && cp <= 0x3fffd)
+    ) {
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
+
+function themeSymbol(theme, key, fallback) {
+  try {
+    const s = theme && typeof theme.symbol === 'function' ? theme.symbol(key) : undefined;
+    return s || fallback;
+  } catch { return fallback; }
+}
+
+function themeFg(theme, color, text) {
+  try {
+    return theme && typeof theme.fg === 'function' ? theme.fg(color, text) : text;
+  } catch { return text; }
+}
+
 function resetSessionState() {
   queuedContext.length = 0;
   contextWarningState.callsSinceWarn = 0;
@@ -225,7 +281,7 @@ function onTurnEnd(_event, ctx = {}) {
   try { refreshStatus(ctx); } catch {}
 }
 
-function onSessionShutdown() {
+function onSessionShutdown(_event, ctx = {}) {
   for (const watcher of configWatchers) {
     try { watcher.close(); } catch {}
   }
@@ -233,6 +289,13 @@ function onSessionShutdown() {
   resetSessionState();
   if (configReloadTimer) clearTimeout(configReloadTimer);
   configReloadTimer = null;
+  try {
+    if (ctx.ui && typeof ctx.ui.setWidget === 'function') {
+      ctx.ui.setWidget(STATUS_WIDGET_KEY, undefined);
+    }
+  } catch {}
+  statusComponent = null;
+  statusComponentUi = null;
 }
 
 function queuePromptInjectionWarning(event) {
@@ -596,54 +659,180 @@ function parseStateMd(content) {
   return state;
 }
 
-function renderProgressBar(percent) {
-  if (percent == null || isNaN(percent)) return '';
-  const pct = Math.max(0, Math.min(100, parseInt(percent, 10)));
-  return `[${'█'.repeat(Math.floor(pct / 10))}${'░'.repeat(10 - Math.floor(pct / 10))}] ${pct}%`;
+function buildStatusModel(ctx) {
+  const cwd = (ctx && ctx.cwd) || process.cwd();
+  let showUpdate = false;
+  try {
+    const { updateCacheFileName } = packageIdentity();
+    const cacheFile = path.join(os.homedir(), '.cache', 'gsd', updateCacheFileName);
+    if (fs.existsSync(cacheFile)) {
+      showUpdate = evaluateUpdateCache(JSON.parse(fs.readFileSync(cacheFile, 'utf8'))).showUpdate;
+    }
+  } catch {}
+  const state = readGsdState(cwd) || {};
+  let pct = null;
+  try {
+    const usage = ctx && typeof ctx.getContextUsage === 'function' ? ctx.getContextUsage() : null;
+    if (usage && usage.percent != null && Number.isFinite(Number(usage.percent))) {
+      pct = Math.round(Number(usage.percent));
+    }
+  } catch {}
+  return { showUpdate, state, pct };
 }
 
-function formatGsdState(s) {
-  const parts = [];
-  if (s.milestone || s.milestoneName) {
-    const pieces = [s.milestone || '', (s.milestoneName && s.milestoneName !== 'milestone') ? s.milestoneName : '', renderProgressBar(s.percent)].filter(Boolean);
-    if (pieces.length > 0) parts.push(pieces.join(' '));
+function formatStatusSegments(model, theme) {
+  const segments = [];
+  const { showUpdate, state, pct } = model;
+  if (showUpdate) {
+    const icon = themeSymbol(theme, 'icon.package', '📦');
+    const plain = icon ? `${icon} /gsd-update` : '/gsd-update';
+    segments.push({ plain, styled: themeFg(theme, 'warning', plain) });
   }
-  const phasesStr = (s.nextPhases && s.nextPhases.length > 0) ? s.nextPhases.join('/') : null;
-  if (s.activePhase) {
-    const stage = s.status || '';
-    parts.push(stage ? `Phase ${s.activePhase} ${stage}` : `Phase ${s.activePhase}`);
-  } else if (s.nextAction && phasesStr) {
-    parts.push(`next ${s.nextAction} ${phasesStr}`);
-  } else if (Number(s.percent) === 100 || (s.completedPhases && s.totalPhases && s.completedPhases === s.totalPhases)) {
-    parts.push('milestone complete');
-  } else {
-    if (s.status) parts.push(s.status);
-    if (s.phaseNum && s.phaseTotal) parts.push(s.phaseName ? `${s.phaseName} (${s.phaseNum}/${s.phaseTotal})` : `ph ${s.phaseNum}/${s.phaseTotal}`);
+  if (state && Object.keys(state).length > 0) {
+    const milestone = state.milestone || state.milestoneName;
+    if (milestone) {
+      const icon = themeSymbol(theme, 'icon.goal', '🎯');
+      const pctStr = (state.percent != null && Number.isFinite(Number(state.percent)))
+        ? ` · ${Number(state.percent)}%`
+        : '';
+      const plain = icon ? `${icon} ${milestone}${pctStr}` : `${milestone}${pctStr}`;
+      segments.push({ plain, styled: themeFg(theme, 'muted', plain) });
+      if (state.activePhase) {
+        const phaseText = `P${state.activePhase}${state.status ? ` ${state.status}` : ''}`;
+        segments.push({ plain: phaseText, styled: themeFg(theme, 'muted', phaseText) });
+      }
+    } else if (state.activePhase) {
+      const phaseText = `P${state.activePhase}${state.status ? ` ${state.status}` : ''}`;
+      segments.push({ plain: phaseText, styled: themeFg(theme, 'muted', phaseText) });
+    } else if (state.nextAction && state.nextPhases && state.nextPhases.length > 0) {
+      const phasesStr = state.nextPhases.join('/');
+      const plain = `next ${state.nextAction} ${phasesStr}`;
+      segments.push({ plain, styled: themeFg(theme, 'muted', plain) });
+    } else if (Number(state.percent) === 100 || (state.completedPhases && state.totalPhases && state.completedPhases === state.totalPhases)) {
+      segments.push({ plain: 'milestone complete', styled: themeFg(theme, 'muted', 'milestone complete') });
+    } else {
+      const parts = [];
+      if (state.status) parts.push(state.status);
+      if (state.phaseNum && state.phaseTotal) {
+        parts.push(state.phaseName ? `${state.phaseName} (${state.phaseNum}/${state.phaseTotal})` : `ph ${state.phaseNum}/${state.phaseTotal}`);
+      }
+      if (parts.length > 0) {
+        const plain = parts.join(' ');
+        segments.push({ plain, styled: themeFg(theme, 'muted', plain) });
+      }
+    }
   }
-  return parts.join(' · ');
+  if (pct != null && Number.isFinite(pct)) {
+    const icon = themeSymbol(theme, 'icon.context', 'ctx');
+    const plain = icon ? `${icon} ${pct}%` : `${pct}%`;
+    const color = pct >= 75 ? 'error' : (pct >= 65 ? 'warning' : 'muted');
+    segments.push({ plain, styled: themeFg(theme, color, plain) });
+  }
+  return segments;
 }
 
-function evaluateUpdateCache(cache) {
-  const { PACKAGE_NAME } = packageIdentity();
-  if (!cache || !cache.package_name || cache.package_name !== PACKAGE_NAME) return { showUpdate: false };
-  return { showUpdate: Boolean(cache.update_available) };
+function createStatusComponent() {
+  const component = {
+    tui: null,
+    theme: null,
+    pendingModel: null,
+    segments: [],
+    styledLine: '',
+    plainWidth: 0,
+    cachedWidth: undefined,
+    cachedLines: [],
+
+    setModel(model) {
+      this.pendingModel = model;
+      this._recompute();
+      if (this.tui) {
+        try { this.tui.requestRender && this.tui.requestRender(); } catch {}
+      }
+    },
+
+    _recompute() {
+      if (this.pendingModel == null) return;
+      this.segments = formatStatusSegments(this.pendingModel, this.theme);
+      const sep = themeFg(this.theme, 'border', ' · ');
+      this.styledLine = this.segments.map(s => s.styled).join(sep);
+      const sepWidth = 3 * Math.max(0, this.segments.length - 1);
+      this.plainWidth = this.segments.reduce((sum, s) => sum + visibleWidthApprox(s.plain), 0) + sepWidth;
+      this.cachedWidth = undefined;
+    },
+
+    attach(tuiArg, themeArg) {
+      this.tui = tuiArg;
+      this.theme = themeArg;
+      this._recompute();
+      return this;
+    },
+
+    render(width) {
+      if (this.segments.length === 0) return [];
+      if (this.cachedWidth === width) return this.cachedLines;
+      const pad = Math.max(0, width - this.plainWidth);
+      this.cachedLines = [' '.repeat(pad) + this.styledLine];
+      this.cachedWidth = width;
+      return this.cachedLines;
+    },
+
+    dispose() {
+      this.tui = null;
+      this.theme = null;
+      this.segments = [];
+      this.styledLine = '';
+      this.plainWidth = 0;
+      this.cachedWidth = undefined;
+      this.cachedLines = [];
+    },
+  };
+  return component;
+}
+
+function refreshStatusLegacy(ctx) {
+  try {
+    if (!ctx || !ctx.ui || typeof ctx.ui.setStatus !== 'function') return;
+    const model = buildStatusModel(ctx);
+    const segments = formatStatusSegments(model, null);
+    const text = segments.map(s => s.plain).join(' · ') || undefined;
+    ctx.ui.setStatus('gsd', text);
+  } catch {}
 }
 
 function refreshStatus(ctx) {
   try {
-    if (!ctx || !ctx.ui || typeof ctx.ui.setStatus !== 'function') return;
-    const parts = [];
-    const { updateCacheFileName } = packageIdentity();
-    const cacheFile = path.join(os.homedir(), '.cache', 'gsd', updateCacheFileName);
-    try {
-      if (fs.existsSync(cacheFile) && evaluateUpdateCache(JSON.parse(fs.readFileSync(cacheFile, 'utf8'))).showUpdate) parts.push('⬆ /gsd:update');
-    } catch {}
-    const state = formatGsdState(readGsdState(ctx.cwd || process.cwd()) || {});
-    if (state) parts.push(state);
-    const usage = typeof ctx.getContextUsage === 'function' ? ctx.getContextUsage() : null;
-    if (usage && usage.percent != null && Number.isFinite(Number(usage.percent))) parts.push(`ctx ${Math.round(Number(usage.percent))}%`);
-    ctx.ui.setStatus('gsd', parts.join(' · ') || undefined);
+    if (!ctx || !ctx.ui) return;
+    const model = buildStatusModel(ctx);
+    const hasContent = model.showUpdate || model.pct != null ||
+      (model.state && Object.keys(model.state).length > 0);
+    if (ctx.hasUI && typeof ctx.ui.setWidget === 'function') {
+      if (!hasContent) {
+        if (statusComponent) {
+          try { ctx.ui.setWidget(STATUS_WIDGET_KEY, undefined); } catch {}
+          statusComponent = null;
+          statusComponentUi = null;
+        }
+        return;
+      }
+      if (!statusComponent || statusComponentUi !== ctx.ui) {
+        const component = createStatusComponent();
+        component.setModel(model);
+        try {
+          ctx.ui.setWidget(STATUS_WIDGET_KEY, (tui, theme) => component.attach(tui, theme));
+          statusComponent = component;
+          statusComponentUi = ctx.ui;
+        } catch {
+          statusComponent = null;
+          statusComponentUi = null;
+          refreshStatusLegacy(ctx);
+        }
+      } else {
+        statusComponent.setModel(model);
+      }
+      return;
+    }
   } catch {}
+  refreshStatusLegacy(ctx);
 }
 
 function communityEnabled(cwd) {
@@ -953,4 +1142,10 @@ module.exports._test = {
   isGitSubcommand,
   forceGitAddCwds,
   findExecutableOnPath,
+  buildStatusModel,
+  createStatusComponent,
+  formatStatusSegments,
+  visibleWidthApprox,
+  stripAnsi,
+  STATUS_WIDGET_KEY,
 };

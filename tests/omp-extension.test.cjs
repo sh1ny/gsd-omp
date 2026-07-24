@@ -222,4 +222,128 @@ describe('OMP extension', () => {
       assert.ok(handlers.has(event), `${event} handler must be registered`);
     }
   });
+
+  test('status widget installed and right-aligned', (t) => {
+    const tmpDir = createTempDir('gsd-omp-widget-align-');
+    t.after(() => cleanup(tmpDir));
+    const setWidgetCalls = [];
+    const ctx = {
+      cwd: tmpDir,
+      hasUI: true,
+      getContextUsage: () => ({ percent: 6 }),
+      ui: { setWidget: (...args) => setWidgetCalls.push(args), setStatus() {}, notify() {} },
+    };
+    const { handlers } = registerExtension();
+    handlers.get('session_start')({ type: 'session_start' }, ctx);
+    flushContext(handlers);
+    handlers.get('turn_end')({ type: 'turn_end' }, ctx);
+
+    const installCall = setWidgetCalls.find((c) => c[0] === extension._test.STATUS_WIDGET_KEY);
+    assert.ok(installCall, 'setWidget called with gsd-status key');
+    assert.strictEqual(typeof installCall[1], 'function', 'second arg is a factory function');
+
+    const fakeTheme = {
+      symbol: (k) => ({ 'icon.context': '\ue70f' })[k],
+      fg: (c, text) => `\x1b[36m${text}\x1b[39m`,
+    };
+    const requestRenderCalls = [];
+    const fakeTui = { requestRender: () => requestRenderCalls.push(1) };
+    const component = installCall[1](fakeTui, fakeTheme);
+    assert.ok(component && typeof component.render === 'function', 'factory returns a component');
+
+    const width = 40;
+    const lines = component.render(width);
+    assert.strictEqual(lines.length, 1, 'renders exactly one line');
+    const visible = extension._test.visibleWidthApprox(extension._test.stripAnsi(lines[0]));
+    assert.strictEqual(visible, width, 'line is right-aligned to full width');
+    assert.ok(extension._test.stripAnsi(lines[0]).endsWith('6%'), 'line ends with the ctx percentage');
+  });
+
+  test('status widget nerd icon and threshold colors', () => {
+    const { formatStatusSegments } = extension._test;
+    const nerdTheme = {
+      symbol: (k) => ({ 'icon.context': '\ue70f' })[k],
+      fg: (c, text) => `<${c}>${text}</>`,
+    };
+    const muted = formatStatusSegments({ showUpdate: false, state: {}, pct: 6 }, nerdTheme);
+    assert.ok(muted.length === 1, 'only ctx segment at pct 6');
+    assert.match(muted[0].styled, /<muted>/, 'pct 6 → muted color');
+
+    const warning = formatStatusSegments({ showUpdate: false, state: {}, pct: 70 }, nerdTheme);
+    assert.match(warning[0].styled, /<warning>/, 'pct 70 → warning color');
+
+    const error = formatStatusSegments({ showUpdate: false, state: {}, pct: 80 }, nerdTheme);
+    assert.match(error[0].styled, /<error>/, 'pct 80 → error color');
+  });
+
+  test('status widget update segment uses hyphen form', () => {
+    const { formatStatusSegments } = extension._test;
+    const segments = formatStatusSegments({ showUpdate: true, state: {}, pct: null }, null);
+    assert.ok(segments.length >= 1, 'update segment present');
+    const updateSeg = segments.find((s) => s.plain.includes('/gsd-update'));
+    assert.ok(updateSeg, 'segment contains /gsd-update (hyphen form)');
+    assert.ok(!segments.some((s) => s.plain.includes('/gsd:update')), 'no colon form');
+  });
+
+  test('status widget hides when no content', (t) => {
+    const tmpDir = createTempDir('gsd-omp-widget-empty-');
+    t.after(() => cleanup(tmpDir));
+    const setWidgetCalls = [];
+    const setStatusCalls = [];
+    const ctx = {
+      cwd: tmpDir,
+      hasUI: true,
+      getContextUsage: () => null,
+      ui: { setWidget: (...args) => setWidgetCalls.push(args), setStatus: (...args) => setStatusCalls.push(args), notify() {} },
+    };
+    const { handlers } = registerExtension();
+    handlers.get('session_start')({ type: 'session_start' }, ctx);
+    flushContext(handlers);
+    handlers.get('turn_end')({ type: 'turn_end' }, ctx);
+
+    const cleared = setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && c[1] === undefined);
+    const notInstalled = !setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && typeof c[1] === 'function');
+    assert.ok(cleared || notInstalled, 'widget cleared or never installed when no content');
+  });
+
+  test('status widget legacy fallback uses setStatus', (t) => {
+    const tmpDir = createTempDir('gsd-omp-widget-legacy-');
+    t.after(() => cleanup(tmpDir));
+    const setStatusCalls = [];
+    const ctx = {
+      cwd: tmpDir,
+      hasUI: false,
+      getContextUsage: () => ({ percent: 6 }),
+      ui: { setStatus: (...args) => setStatusCalls.push(args), notify() {} },
+    };
+    const { handlers } = registerExtension();
+    handlers.get('session_start')({ type: 'session_start' }, ctx);
+    flushContext(handlers);
+    handlers.get('turn_end')({ type: 'turn_end' }, ctx);
+
+    const last = setStatusCalls[setStatusCalls.length - 1];
+    assert.ok(last, 'setStatus was called');
+    assert.ok(String(last[1]).includes('ctx 6%'), 'legacy text contains ctx 6%');
+  });
+
+  test('status widget cleared on shutdown', (t) => {
+    const tmpDir = createTempDir('gsd-omp-widget-shutdown-');
+    t.after(() => cleanup(tmpDir));
+    const setWidgetCalls = [];
+    const ctx = {
+      cwd: tmpDir,
+      hasUI: true,
+      getContextUsage: () => ({ percent: 6 }),
+      ui: { setWidget: (...args) => setWidgetCalls.push(args), setStatus() {}, notify() {} },
+    };
+    const { handlers } = registerExtension();
+    handlers.get('session_start')({ type: 'session_start' }, ctx);
+    flushContext(handlers);
+    handlers.get('turn_end')({ type: 'turn_end' }, ctx);
+    setWidgetCalls.length = 0;
+    handlers.get('session_shutdown')({ type: 'session_shutdown' }, ctx);
+
+    const cleared = setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && c[1] === undefined);
+    assert.ok(cleared, 'widget cleared on session_shutdown');
+  });
 });
