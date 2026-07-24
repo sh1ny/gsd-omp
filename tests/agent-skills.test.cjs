@@ -89,6 +89,18 @@ function runAgentSkillsJson(args, tmpDir, env) {
   }
 }
 
+
+// Helper: build env that clears OMP profile/agent-dir overrides so the OMP
+// runtime resolves to ~/.omp/agent/ (the default) regardless of inherited env.
+function ompEnv(fakeHome) {
+  return {
+    HOME: fakeHome,
+    USERPROFILE: fakeHome,
+    OMP_PROFILE: '',
+    PI_PROFILE: '',
+    PI_CODING_AGENT_DIR: '',
+  };
+}
 // ─── agent-skills command ────────────────────────────────────────────────────
 
 describe('agent-skills command', () => {
@@ -441,9 +453,9 @@ describe('agent-skills global: prefix', () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
-    // Create a fake HOME with ~/.claude/skills/ structure
+    // Create a fake HOME with ~/.omp/agent/skills/ structure (OMP runtime config home)
     fakeHome = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gsd-1992-home-'));
-    globalSkillsDir = path.join(fakeHome, '.claude', 'skills');
+    globalSkillsDir = path.join(fakeHome, '.omp', 'agent', 'skills');
     fs.mkdirSync(globalSkillsDir, { recursive: true });
   });
 
@@ -459,14 +471,14 @@ describe('agent-skills global: prefix', () => {
     return skillDir;
   }
 
-  test('global:valid-skill resolves to $HOME/.claude/skills/valid-skill/SKILL.md', () => {
+  test('global:valid-skill resolves to $HOME/.omp/agent/skills/valid-skill/SKILL.md', () => {
     createGlobalSkill('valid-skill');
     writeConfig(tmpDir, {
       agent_skills: { 'gsd-executor': ['global:valid-skill'] },
     });
 
     const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
+      ['agent-skills', 'gsd-executor'], tmpDir, ompEnv(fakeHome)
     );
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.ok(r.ir.block.includes('valid-skill/SKILL.md'), `block must reference the global skill: ${r.ir.block}`);
@@ -479,7 +491,7 @@ describe('agent-skills global: prefix', () => {
     });
 
     const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
+      ['agent-skills', 'gsd-executor'], tmpDir, ompEnv(fakeHome)
     );
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.strictEqual(r.ir.block, '', 'block must be empty when invalid name is rejected');
@@ -491,7 +503,7 @@ describe('agent-skills global: prefix', () => {
     });
 
     const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
+      ['agent-skills', 'gsd-executor'], tmpDir, ompEnv(fakeHome)
     );
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.strictEqual(r.ir.block, '', 'block must be empty when skill is missing');
@@ -509,7 +521,7 @@ describe('agent-skills global: prefix', () => {
     });
 
     const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
+      ['agent-skills', 'gsd-executor'], tmpDir, ompEnv(fakeHome)
     );
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.ok(r.ir.block.includes('shadcn/SKILL.md'), 'block must include global shadcn');
@@ -523,7 +535,7 @@ describe('agent-skills global: prefix', () => {
     });
 
     const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
+      ['agent-skills', 'gsd-executor'], tmpDir, ompEnv(fakeHome)
     );
     assert.ok(r.success, `Command failed: ${r.error}`);
     assert.strictEqual(r.ir.block, '', 'block must be empty for empty global: prefix');
@@ -1114,22 +1126,6 @@ describe('bug #1243: plugin-namespaced agent skills', () => {
 
   // ─── cross-runtime ──────────────────────────────────────────────────────────
 
-  test('cross-runtime: namespaced + codex runtime → no directive (skipped/warned)', () => {
-    writeConfig(tmpDir, {
-      runtime: 'codex',
-      agent_skills: { 'gsd-executor': ['global:vendor:remote-skill'] },
-    });
-
-    const r = runAgentSkillsJson(
-      ['agent-skills', 'gsd-executor'], tmpDir, { HOME: fakeHome, USERPROFILE: fakeHome }
-    );
-    assert.ok(r.success, `Command failed: ${r.error}`);
-    assert.strictEqual(
-      r.ir.block,
-      '',
-      `namespaced skill on non-claude runtime must produce empty block, got: ${r.ir.block}`
-    );
-  });
 
   test('cross-runtime: namespaced + claude runtime → directive emitted', () => {
     writeConfig(tmpDir, {

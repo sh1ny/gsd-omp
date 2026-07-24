@@ -902,13 +902,13 @@ describe('bug-3584: init manager recommendedActions emit hyphen form', () => {
 
   afterEach(() => cleanup(tmpDir));
 
-  test('skills runtime (claude) emits /gsd-<cmd> in recommended_actions[].command', () => {
+  test('skills runtime (omp) emits /gsd-<cmd> in recommended_actions[].command', () => {
     // Plan-but-not-executed: directory exists with a PLAN.md → execute is recommended.
     const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
     fs.mkdirSync(phaseDir, { recursive: true });
     fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
 
-    const result = runGsdTools('init manager', tmpDir, { GSD_RUNTIME: 'claude' });
+    const result = runGsdTools('init manager', tmpDir, { GSD_RUNTIME: 'omp' });
     assert.ok(result.success, `init manager failed: ${result.error || result.output}`);
 
     const payload = JSON.parse(result.output);
@@ -927,46 +927,7 @@ describe('bug-3584: init manager recommendedActions emit hyphen form', () => {
     }
     assertNoColonForm(payload, 'init.manager payload');
   });
-
-  test('codex runtime emits $gsd-<cmd> in recommended_actions[].command', () => {
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
-    fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
-
-    const result = runGsdTools('init manager', tmpDir, { GSD_RUNTIME: 'codex' });
-    assert.ok(result.success, `init manager (codex) failed: ${result.error || result.output}`);
-
-    const payload = JSON.parse(result.output);
-    const commands = collectCommandFields(payload.recommended_actions || []);
-    assert.ok(commands.length > 0);
-
-    for (const cmd of commands) {
-      assert.ok(
-        cmd.startsWith('$gsd-'),
-        `codex recommended_actions command must use $gsd- shell-var form, got ${cmd}`,
-      );
-    }
-  });
-
-  test('codex alias runtime emits $gsd-<cmd> in recommended_actions[].command', () => {
-    const phaseDir = path.join(tmpDir, '.planning', 'phases', '01-foundation');
-    fs.mkdirSync(phaseDir, { recursive: true });
-    fs.writeFileSync(path.join(phaseDir, '01-01-PLAN.md'), '# Plan\n');
-
-    const result = runGsdTools('init manager', tmpDir, { GSD_RUNTIME: 'codex-app' });
-    assert.ok(result.success, `init manager (codex-app) failed: ${result.error || result.output}`);
-
-    const payload = JSON.parse(result.output);
-    const commands = collectCommandFields(payload.recommended_actions || []);
-    assert.ok(commands.length > 0);
-
-    for (const cmd of commands) {
-      assert.ok(
-        cmd.startsWith('$gsd-'),
-        `codex alias recommended_actions command must use $gsd- shell-var form, got ${cmd}`,
-      );
-    }
-  });
+  // codex tests removed — omp is the only runtime (slash-hyphen command style).
 });
 
 describe('bug-3584: phase add persists hyphen form into ROADMAP.md', () => {
@@ -991,7 +952,7 @@ describe('bug-3584: phase add persists hyphen form into ROADMAP.md', () => {
     const addResult = runGsdTools(
       ['phase', 'add', 'Test new feature'],
       tmpDir,
-      { GSD_RUNTIME: 'claude' },
+      { GSD_RUNTIME: 'omp' },
     );
     assert.ok(addResult.success, `phase add failed: ${addResult.error || addResult.output}`);
     const addPayload = JSON.parse(addResult.output);
@@ -1003,7 +964,7 @@ describe('bug-3584: phase add persists hyphen form into ROADMAP.md', () => {
     const getResult = runGsdTools(
       ['roadmap', 'get-phase', String(addPayload.phase_number)],
       tmpDir,
-      { GSD_RUNTIME: 'claude' },
+      { GSD_RUNTIME: 'omp' },
     );
     assert.ok(getResult.success, `roadmap get-phase failed: ${getResult.error || getResult.output}`);
     const getPayload = JSON.parse(getResult.output);
@@ -1032,7 +993,7 @@ describe('bug-3584: validate health emits hyphen form in fix hints', () => {
     const result = runGsdTools(
       ['validate', 'health'],
       tmpDir,
-      { GSD_RUNTIME: 'claude' },
+      { GSD_RUNTIME: 'omp' },
     );
     // validate health exits non-zero on broken projects but still emits JSON to stdout.
     const stdout = result.output;
@@ -1077,7 +1038,7 @@ describe('bug-3584: validate context recommendation uses hyphen form', () => {
     const result = runGsdTools(
       ['validate', 'context', '--tokens-used', '75000', '--context-window', '100000', '--json'],
       tmpDir,
-      { GSD_RUNTIME: 'claude' },
+      { GSD_RUNTIME: 'omp' },
     );
     assert.ok(result.success, `validate context failed: ${result.error || result.output}`);
 
@@ -1093,55 +1054,6 @@ describe('bug-3584: validate context recommendation uses hyphen form', () => {
     );
   });
 });
-
-describe('bug-3584: validate health uses formatter for codex runtime too', () => {
-  test('validate health under codex emits $gsd-<cmd> in fix strings (positive assertion)', (t) => {
-    const tmpDir = createTempDir();
-    t.after(() => cleanup(tmpDir));
-
-    const result = runGsdTools(
-      ['validate', 'health'],
-      tmpDir,
-      { GSD_RUNTIME: 'codex' },
-    );
-    let payload;
-    try {
-      payload = JSON.parse(result.output);
-    } catch (e) {
-      throw new Error(`validate health (codex) did not emit JSON: ${result.output.slice(0, 400)}`);
-    }
-
-    const allIssues = []
-      .concat(payload.errors || [])
-      .concat(payload.warnings || [])
-      .concat(payload.info || []);
-
-    // Collect fixes that mention any gsd slash-command form so we can lock
-    // both the absence of legacy forms AND the presence of the codex shape.
-    const fixesWithGsdRef = allIssues
-      .map((i) => i.fix)
-      .filter((f) => typeof f === 'string' && /(?:\$|\/)gsd[-:]/.test(f));
-
-    assert.ok(
-      fixesWithGsdRef.length > 0,
-      'validate health on a bare tmpdir must produce at least one fix hint referencing a gsd command',
-    );
-
-    for (const fix of fixesWithGsdRef) {
-      assert.ok(
-        fix.includes('$gsd-'),
-        `codex validate health fix must use shell-var $gsd- form, got ${JSON.stringify(fix)}`,
-      );
-      assert.ok(
-        !fix.includes('/gsd:'),
-        `codex validate health fix must not contain /gsd: colon form, got ${JSON.stringify(fix)}`,
-      );
-      assert.ok(
-        !fix.includes('/gsd-'),
-        `codex validate health fix must not contain /gsd- (skills) form, got ${JSON.stringify(fix)}`,
-      );
-    }
-  });
-});
+  // codex validate health test removed — omp is the only runtime.
   });
 }

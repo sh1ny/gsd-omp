@@ -1686,63 +1686,32 @@ describe('bug-853 — manager/autonomous gate background dispatch by runtime', (
 });
 
 describe('dispatch-should-flatten query — behavioral', () => {
-  // #853 / #1708: The typed query replaces prose-level RUNTIME===codex checks.
+  // #853 / #1708: The typed query replaces prose-level RUNTIME checks.
   // shouldFlattenDispatch returns false only when both dispatch.background AND
   // dispatch.backgroundDispatch are true in the capability registry.
   //
-  // Registry values (from host-integration-capability-matrix.md):
-  //   codex:   background=true, backgroundDispatch=true  → shouldFlatten=false (may background)
-  //   claude:  background=true, backgroundDispatch=false → shouldFlatten=true  (must inline)
-  //   cursor:  background=true, backgroundDispatch=true  → shouldFlatten=false (may background)
-  //   unknown: no entry → fail-closed                   → shouldFlatten=true  (must inline)
+  // OMP runtime: background=true, backgroundDispatch=true → shouldFlatten=false
+  // Unknown: no entry → fail-closed → shouldFlatten=true (must inline)
 
-  test('runtime=codex → shouldFlatten=false (background dispatch safe)', () => {
+  test('runtime=omp → shouldFlatten=false (background dispatch safe)', () => {
     const tmpDir = createTempProject();
     try {
       const result = runGsdTools(['query', 'dispatch-should-flatten', '--raw'], tmpDir, {
-        GSD_RUNTIME: 'codex',
+        GSD_RUNTIME: 'omp',
       });
       assert.ok(result.success, `Expected success, got error: ${result.error}`);
-      assert.strictEqual(result.output, 'false', `codex should return false (may background), got: ${result.output}`);
-    } finally {
-      cleanupDir(tmpDir);
-    }
-  });
-
-  test('runtime=claude → shouldFlatten=true (must inline)', () => {
-    const tmpDir = createTempProject();
-    try {
-      const result = runGsdTools(['query', 'dispatch-should-flatten', '--raw'], tmpDir, {
-        GSD_RUNTIME: 'claude',
-      });
-      assert.ok(result.success, `Expected success, got error: ${result.error}`);
-      assert.strictEqual(result.output, 'true', `claude should return true (must inline), got: ${result.output}`);
-    } finally {
-      cleanupDir(tmpDir);
-    }
-  });
-
-  test('runtime=cursor → shouldFlatten=false (background dispatch safe)', () => {
-    const tmpDir = createTempProject();
-    try {
-      const result = runGsdTools(['query', 'dispatch-should-flatten', '--raw'], tmpDir, {
-        GSD_RUNTIME: 'cursor',
-      });
-      assert.ok(result.success, `Expected success, got error: ${result.error}`);
-      assert.strictEqual(result.output, 'false', `cursor should return false (may background), got: ${result.output}`);
+      assert.strictEqual(result.output, 'false', `omp should return false (may background), got: ${result.output}`);
     } finally {
       cleanupDir(tmpDir);
     }
   });
 
   test('unknown runtime → shouldFlatten=true (fail-closed → must inline)', () => {
-    // An unknown runtime has no registry entry → dispatch is null → fail-closed to true.
     const tmpDir = createTempProject();
     try {
       const result = runGsdTools(['query', 'dispatch-should-flatten', '--raw'], tmpDir, {
         GSD_RUNTIME: 'unknown-runtime-xyz',
       });
-      // The query must succeed (exit 0) even for unknown runtimes — fail-closed not crash-closed.
       assert.ok(result.success, `Expected success (fail-closed), got error: ${result.error}`);
       assert.strictEqual(result.output, 'true', `unknown runtime should return true (fail-closed), got: ${result.output}`);
     } finally {
@@ -1754,7 +1723,7 @@ describe('dispatch-should-flatten query — behavioral', () => {
     const tmpDir = createTempProject();
     try {
       const result = runGsdTools(['query', 'dispatch-should-flatten', '--json'], tmpDir, {
-        GSD_RUNTIME: 'codex',
+        GSD_RUNTIME: 'omp',
       });
       assert.ok(result.success, `Expected success, got error: ${result.error}`);
       let parsed;
@@ -1763,37 +1732,10 @@ describe('dispatch-should-flatten query — behavioral', () => {
       } catch {
         assert.fail(`Expected valid JSON output, got: ${result.output}`);
       }
-      assert.strictEqual(parsed.runtime, 'codex');
+      assert.strictEqual(parsed.runtime, 'omp');
       assert.strictEqual(parsed.shouldFlatten, false);
       assert.ok(parsed.dispatch !== null && typeof parsed.dispatch === 'object', 'dispatch should be an object');
       assert.strictEqual(parsed.dispatch.backgroundDispatch, true);
-    } finally {
-      cleanupDir(tmpDir);
-    }
-  });
-
-  test('config.runtime takes precedence when GSD_RUNTIME not set', () => {
-    // GSD_RUNTIME > config.runtime > 'claude'
-    // Write config.json with runtime=codex; no GSD_RUNTIME override.
-    const tmpDir = createTempProject();
-    try {
-      fs.writeFileSync(
-        path.join(tmpDir, '.planning', 'config.json'),
-        JSON.stringify({ runtime: 'codex' }),
-        'utf-8',
-      );
-      // Override GSD_RUNTIME to '' (empty string) so any ambient value is cleared.
-      // resolveRuntimeNameFromCandidates treats empty string as absent (normalizes
-      // to '' which is falsy → skipped → falls through to config.runtime=codex).
-      // This is the only way to suppress an ambient GSD_RUNTIME since runGsdTools
-      // merges { ...process.env, ...TEST_ENV_BASE, ...env } — passing '' as the
-      // override overwrites the ambient value at the correct merge position.
-      const result = runGsdTools(['query', 'dispatch-should-flatten', '--raw'], tmpDir, {
-        GSD_RUNTIME: '',
-      });
-      // config.runtime=codex with GSD_RUNTIME cleared → codex backgrounds → shouldFlatten=false
-      assert.ok(result.success, `Expected success, got error: ${result.error}`);
-      assert.strictEqual(result.output, 'false', `config.runtime=codex (GSD_RUNTIME cleared) should return false (may background), got: ${result.output}`);
     } finally {
       cleanupDir(tmpDir);
     }

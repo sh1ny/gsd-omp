@@ -143,31 +143,8 @@ function ensureBuiltArtifacts(overrides = {}) {
 // empty window everywhere (CI scoped/unit shards + local). Subsequent on-demand
 // rebuilds only atomically replace individual files (per-file rename in
 // build-hooks.js) and never re-empty the dir, so they stay safe.
-function ensureBuiltHooks(overrides = {}) {
-  const { existsSync, statSync } = require('fs');
-  const root = overrides.root || join(__dirname, '..');
-  const distDir = overrides.distDir || join(root, 'hooks', 'dist');
-  const hookNames = overrides.hookNames || require('./build-hooks.js').HOOKS_TO_COPY;
-  const runBuild = overrides.runBuild || (() => {
-    execFileSync(process.execPath, [join(root, 'scripts', 'build-hooks.js')], {
-      cwd: root,
-      stdio: 'inherit',
-    });
-  });
-
-  // dist is "complete" only if every expected hook exists as a non-empty file.
-  // Absent dir, empty dir, or a missing/zero-byte hook all trigger a rebuild.
-  const complete = existsSync(distDir) && hookNames.every((hook) => {
-    const p = join(distDir, hook);
-    try {
-      return existsSync(p) && statSync(p).size > 0;
-    } catch {
-      return false;
-    }
-  });
-  if (!complete) {
-    runBuild();
-  }
+function ensureBuiltHooks() {
+  // OMP-only: hooks/ tree deleted; hooks/dist no longer needed.
 }
 const MARKED_SUITES = ['integration', 'install', 'security', 'slow'];
 

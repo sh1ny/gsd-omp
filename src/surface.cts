@@ -361,9 +361,8 @@ function applySurface(runtimeConfigDir: string, layout: Layout, manifest: Map<st
   const _resolvedTarget = posixNormalize(path.resolve(layout.configDir));
   const _homeDir = posixNormalize(_homedirFn());
   const _isGlobal = (layout.scope ?? 'global') === 'global';
-  const _isOpencode = layout.runtime === 'opencode';
   const _isWindowsHost = (opts?.platform ?? process.platform) === 'win32';
-  const _pathPrefix = runtimeArtifactConversion._computePathPrefix({ isGlobal: _isGlobal, isOpencode: _isOpencode, isWindowsHost: _isWindowsHost, resolvedTarget: _resolvedTarget, homeDir: _homeDir });
+  const _pathPrefix = runtimeArtifactConversion._computePathPrefix({ isGlobal: _isGlobal, isWindowsHost: _isWindowsHost, resolvedTarget: _resolvedTarget, homeDir: _homeDir });
   const _attribution = opts?.resolveAttribution ? opts.resolveAttribution(layout.runtime) : undefined;
   const agentCtx: AgentCtx = { runtime: layout.runtime, pathPrefix: _pathPrefix, attribution: _attribution };
 

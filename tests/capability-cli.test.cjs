@@ -1137,10 +1137,10 @@ describe('issue-2322: capability set --runtime materializes an installed third-p
     assert.equal(parse(install.output).status, 'installed');
     assert.ok(fs.existsSync(path.join(capDir(home, 'my-thing'), 'skills', 'my-thing', 'SKILL.md')), 'sanity: install copies the skill verbatim into the capabilities root');
 
-    // Step 3 of the issue repro: capability set my-thing --runtime claude --scope global
+    // Step 3 of the issue repro: capability set my-thing --runtime omp --scope global
     const rcd = tmpDir('cap-cli-rcd-');
     const setResult = runGsdTools(
-      ['capability', 'set', 'my-thing', '--runtime', 'claude', '--scope', 'global', '--config-dir', rcd, '--raw'],
+      ['capability', 'set', 'my-thing', '--runtime', 'omp', '--scope', 'global', '--config-dir', rcd, '--raw'],
       cwd,
       scopeEnv(home),
     );

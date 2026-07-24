@@ -43,17 +43,6 @@ function expandTilde(p: string): string {
   return p;
 }
 
-export interface ResolveAntigravityOpts {
-  env?: Record<string, string | undefined>;
-  home?: string;
-  existsSync?: (p: string) => boolean;
-}
-
-export interface ResolveKimiOpts {
-  env?: Record<string, string | undefined>;
-  home?: string;
-  existsSync?: (p: string) => boolean;
-}
 
 export interface ResolveConfigHomeOpts {
   env?: Record<string, string | undefined>;
@@ -283,147 +272,6 @@ function expandTildeWithHome(p: string, home: string): string {
   return p;
 }
 
-/**
- * Resolve Antigravity global config dir across 1.x and 2.x layouts.
- *
- * Thin wrapper delegating to resolveConfigHomeFromDescriptor with the
- * antigravity descriptor shape. Preserved for external callers and tests.
- */
-export function resolveAntigravityGlobalDir(opts: ResolveAntigravityOpts = {}): string {
-  const env: Record<string, string | undefined> = opts.env ?? process.env;
-  const home = opts.home ?? os.homedir();
-  const existsSyncFn = opts.existsSync ?? fs.existsSync;
-  return resolveConfigHomeFromDescriptor(
-    {
-      kind: 'dot-home-nested',
-      name: 'antigravity',
-      parent: '.gemini',
-      env: ['ANTIGRAVITY_CONFIG_DIR'],
-      probe: ['antigravity', 'antigravity-ide', 'antigravity-cli'],
-      // Prefer the candidate GSD installed into (carries gsd-core/VERSION) over
-      // a bare-existing sibling. Without this, a CLI user (antigravity-cli) who
-      // also has the IDE's ~/.gemini/antigravity dir is shadowed to the legacy
-      // dir because it is probed first. See #213/#217. The posix-slash literal
-      // matches capabilities/antigravity/capability.json; both normalize via
-      // path.join at the check site, so Windows backslash handling is covered.
-      probeExists: 'gsd-core/VERSION',
-    },
-    { env, home, existsSync: existsSyncFn },
-  );
-}
-
-export interface AntigravityAmbiguity {
-  /** True when more than one ~/.gemini/antigravity{,-ide,-cli} dir is present. */
-  ambiguous: boolean;
-  /** The dir GSD currently resolves to (where install/update will write). */
-  resolved: string;
-  /** All probe candidate dirs that exist on disk (absolute paths). */
-  presentDirs: string[];
-  /**
-   * Candidate dirs that carry the GSD marker (gsd-core/VERSION). When this has
-   * exactly one entry, resolution is unambiguous. Zero or >1 entries (or a
-   * marker in a dir other than the one a CLI/IDE user expects) is the #213/#217
-   * misinstall surface: a prior install may have landed in the wrong sibling dir.
-   */
-  gsdMarkedDirs: string[];
-  /** ANTIGRAVITY_CONFIG_DIR is the operator escape hatch; true when already set. */
-  envOverridden: boolean;
-}
-
-/**
- * Detect whether the Antigravity config-dir resolution is ambiguous — i.e. more
- * than one of ~/.gemini/{antigravity,antigravity-ide,antigravity-cli} exists, so
- * a user upgrading from a pre-#217 install may have had GSD written into the
- * wrong sibling dir (the legacy/IDE dir shadowing an active CLI dir).
- *
- * This is a pure, side-effect-free probe intended for the installer and
- * /gsd-update to surface operator guidance (set ANTIGRAVITY_CONFIG_DIR or move
- * gsd-core/ into the intended dir). The migration framework cannot relocate an
- * install across sibling config dirs (it is bounded to a single configDir and
- * has no cross-dir move primitive — see installer-migrations 004), so existing
- * misinstalls are corrected by re-detection + operator guidance, not an
- * automatic move.
- */
-export function detectAntigravityDirAmbiguity(
-  opts: ResolveAntigravityOpts = {},
-): AntigravityAmbiguity {
-  const env: Record<string, string | undefined> = opts.env ?? process.env;
-  const home = opts.home ?? os.homedir();
-  const existsSyncFn = opts.existsSync ?? fs.existsSync;
-  const marker = path.join('gsd-core', 'VERSION');
-  const base = path.join(home, '.gemini');
-  const candidates = ['antigravity', 'antigravity-ide', 'antigravity-cli'].map((c) =>
-    path.join(base, c),
-  );
-  const presentDirs = candidates.filter((dir) => existsSyncFn(dir));
-  const gsdMarkedDirs = candidates.filter((dir) => existsSyncFn(path.join(dir, marker)));
-  return {
-    ambiguous: presentDirs.length > 1,
-    resolved: resolveAntigravityGlobalDir({ env, home, existsSync: existsSyncFn }),
-    presentDirs,
-    gsdMarkedDirs,
-    envOverridden: Boolean(env['ANTIGRAVITY_CONFIG_DIR']),
-  };
-}
-
-/**
- * Resolve Kimi's generic user root using Kimi CLI's documented first-existing
- * generic skills directory policy:
- *
- *   1. ~/.config/agents/skills  (recommended)
- *   2. ~/.agents/skills
- *
- * If neither generic skills directory exists yet, install to the recommended
- * ~/.config/agents root so the generated skills become the first generic
- * candidate Kimi discovers.
- *
- * KIMI_CONFIG_DIR is a GSD installer write-location override. It is not Kimi's
- * upstream data-root variable, and arbitrary roots are discoverable by Kimi only
- * when the user also configures Kimi --skills-dir or extra_skill_dirs.
- *
- * Thin wrapper delegating to resolveConfigHomeFromDescriptor with the
- * kimi descriptor shape. Preserved for external callers and tests.
- */
-export function resolveKimiGlobalDir(opts: ResolveKimiOpts = {}): string {
-  const env: Record<string, string | undefined> = opts.env ?? process.env;
-  const home = opts.home ?? os.homedir();
-  const existsSyncFn = opts.existsSync ?? fs.existsSync;
-  return resolveConfigHomeFromDescriptor(
-    {
-      kind: 'generic-agents-root',
-      name: 'agents',
-      env: ['KIMI_CONFIG_DIR'],
-      probe: ['~/.config/agents', '~/.agents'],
-      probeExists: 'skills',
-    },
-    { env, home, existsSync: existsSyncFn },
-  );
-}
-
-/**
- * Resolve the directory holding Kimi CLI's OWN native config.toml (the file
- * Kimi itself reads for providers/models/hooks/etc — see
- * moonshotai.github.io/kimi-cli/en/configuration/data-locations.html and
- * .../reference/kimi-command.html). Default `~/.kimi`, overridden by
- * `KIMI_SHARE_DIR` per Kimi's own upstream env-var (NOT `KIMI_CONFIG_DIR`,
- * which is a GSD-installer write-location override for the unrelated generic
- * Agent-Skills root resolved by resolveKimiGlobalDir above).
- *
- * This is deliberately a SEPARATE directory from GSD's kimi configHome
- * (~/.config/agents): Kimi's own docs confirm the Agent-Skills search path is
- * independent of KIMI_SHARE_DIR ("This variable does not affect Agent Skills
- * search paths, which are handled separately"). #2095 Upgrade 1 writes GSD's
- * native [[hooks]] entries into `<this dir>/config.toml`, never into the
- * skills configDir.
- */
-export function resolveKimiHooksTomlDir(opts: ResolveKimiOpts = {}): string {
-  const env: Record<string, string | undefined> = opts.env ?? process.env;
-  const home = opts.home ?? os.homedir();
-  return resolveConfigHomeFromDescriptor(
-    { kind: 'dot-home', name: '.kimi', env: ['KIMI_SHARE_DIR'] },
-    { env, home },
-  );
-}
 
 /**
  * Return the global config base directory for the given runtime.
@@ -436,12 +284,6 @@ export function resolveKimiHooksTomlDir(opts: ResolveKimiOpts = {}): string {
  */
 export function getGlobalConfigDir(runtime: string, explicitDir?: string | null): string {
   if (explicitDir) return expandTilde(explicitDir);
-
-  // ── Grok: not in the registry — hardcoded branch ─────────────────────────
-  if (runtime === 'grok') {
-    const env = process.env as Record<string, string | undefined>;
-    return env['GROK_AGENTS_HOME'] ? expandTilde(env['GROK_AGENTS_HOME']) : path.join(os.homedir(), '.agents');
-  }
 
   // ── Descriptor-driven: look up in capability-registry ────────────────────
   const { runtimes } = getRegistry();

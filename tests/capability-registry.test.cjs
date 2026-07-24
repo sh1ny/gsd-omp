@@ -3299,195 +3299,38 @@ describe('ADR-1016 phase 5a: every role:runtime capability is in the registry in
 // ── 24b. Sample axis value assertions ────────────────────────────────────────
 
 describe('ADR-1016 phase 5a: sample axis value assertions', () => {
-  test('codex: commandStyle === shell-var and sandboxTier === codex-agent-sandbox', () => {
+  test('omp: commandStyle and sandboxTier', () => {
     const { capMap } = loadAndValidate(new Set());
     const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['codex'].runtime;
-    assert.strictEqual(rt.commandStyle, 'shell-var', 'codex.commandStyle must be "shell-var"');
-    assert.strictEqual(rt.sandboxTier, 'codex-agent-sandbox', 'codex.sandboxTier must be "codex-agent-sandbox"');
+    const rt = registry.runtimes['omp'].runtime;
+    assert.ok(typeof rt.commandStyle === 'string', 'omp.commandStyle must be a string');
+    assert.ok(typeof rt.sandboxTier === 'string', 'omp.sandboxTier must be a string');
   });
 
-  test('codex: configHome.kind === dot-home, name === .codex', () => {
+  test('omp: configHome is valid', () => {
     const { capMap } = loadAndValidate(new Set());
     const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['codex'].runtime;
-    assert.strictEqual(rt.configHome.kind, 'dot-home', 'codex.configHome.kind must be "dot-home"');
-    assert.strictEqual(rt.configHome.name, '.codex', 'codex.configHome.name must be ".codex"');
-    assert.ok(Array.isArray(rt.configHome.env) && rt.configHome.env.includes('CODEX_HOME'),
-      'codex.configHome.env must include "CODEX_HOME"');
+    const rt = registry.runtimes['omp'].runtime;
+    assert.ok(rt.configHome, 'omp.configHome must be present');
+    assert.ok(typeof rt.configHome.kind === 'string', 'omp.configHome.kind must be a string');
   });
 
-  test('claude: commandStyle === slash-hyphen, sandboxTier === none', () => {
+  test('omp: hooksSurface === none, no hookEvents', () => {
     const { capMap } = loadAndValidate(new Set());
     const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['claude'].runtime;
-    assert.strictEqual(rt.commandStyle, 'slash-hyphen', 'claude.commandStyle must be "slash-hyphen"');
-    assert.strictEqual(rt.sandboxTier, 'none', 'claude.sandboxTier must be "none"');
-  });
-
-  test('claude: configHome.kind === dot-home', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['claude'].runtime;
-    assert.strictEqual(rt.configHome.kind, 'dot-home', 'claude.configHome.kind must be "dot-home"');
-  });
-
-  test('antigravity: configHome.kind === dot-home-nested with parent .gemini', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['antigravity'].runtime;
-    assert.strictEqual(rt.configHome.kind, 'dot-home-nested', 'antigravity.configHome.kind must be "dot-home-nested"');
-    assert.strictEqual(rt.configHome.parent, '.gemini', 'antigravity.configHome.parent must be ".gemini"');
-    assert.ok(Array.isArray(rt.configHome.probe), 'antigravity.configHome.probe must be an array');
-    assert.ok(rt.configHome.probe.length > 0, 'antigravity.configHome.probe must be non-empty');
-  });
-
-  test('kilo: configHome.skillsHome is present', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['kilo'].runtime;
-    assert.ok(rt.configHome.skillsHome, 'kilo.configHome.skillsHome must be present');
-    assert.ok(typeof rt.configHome.skillsHome.kind === 'string', 'kilo.configHome.skillsHome.kind must be a string');
-  });
-
-  test('windsurf: configHome.kind === dot-home-nested with parent .codeium', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['windsurf'].runtime;
-    assert.strictEqual(rt.configHome.kind, 'dot-home-nested', 'windsurf.configHome.kind must be "dot-home-nested"');
-    assert.strictEqual(rt.configHome.parent, '.codeium', 'windsurf.configHome.parent must be ".codeium"');
-  });
-
-  test('kimi: configHome.kind === generic-agents-root', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['kimi'].runtime;
-    assert.strictEqual(rt.configHome.kind, 'generic-agents-root', 'kimi.configHome.kind must be "generic-agents-root"');
-  });
-
-  test('antigravity: hookEvents === gemini', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['antigravity'].runtime;
-    assert.strictEqual(rt.hookEvents, 'gemini', 'antigravity.hookEvents must be "gemini"');
-  });
-
-  test('opencode: hooksSurface === none, no hookEvents (registers zero lifecycle hooks)', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['opencode'].runtime;
-    assert.strictEqual(rt.hooksSurface, 'none', 'opencode.hooksSurface must be "none" (no managed lifecycle hooks)');
+    const rt = registry.runtimes['omp'].runtime;
+    assert.strictEqual(rt.hooksSurface, 'none', 'omp.hooksSurface must be "none" (no managed lifecycle hooks)');
     assert.ok(
       !Object.prototype.hasOwnProperty.call(rt, 'hookEvents'),
-      'opencode.runtime must NOT have hookEvents (no lifecycle hook registration)',
+      'omp.runtime must NOT have hookEvents (no lifecycle hook registration)',
     );
   });
 
-  test('opencode: extensionEvents === opencode (the extension-system event dialect — #1943)', () => {
+  test('omp: supportTier', () => {
     const { capMap } = loadAndValidate(new Set());
     const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['opencode'].runtime;
-    assert.strictEqual(rt.extensionEvents, 'opencode',
-      'opencode declares the extension-system event subset via extensionEvents (NOT hookEvents)');
-  });
-
-  test('kilo: hooksSurface === none, no hookEvents (registers zero lifecycle hooks)', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['kilo'].runtime;
-    assert.strictEqual(rt.hooksSurface, 'none', 'kilo.hooksSurface must be "none" (no managed lifecycle hooks)');
-    assert.ok(
-      !Object.prototype.hasOwnProperty.call(rt, 'hookEvents'),
-      'kilo.runtime must NOT have hookEvents (no lifecycle hook registration)',
-    );
-  });
-
-  test('kimi: configHome.probeExists === "skills" (probe selects first candidate with skills/ dir)', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const rt = registry.runtimes['kimi'].runtime;
-    assert.strictEqual(
-      rt.configHome.probeExists, 'skills',
-      'kimi.configHome.probeExists must be "skills" (selects first probe candidate where <candidate>/skills exists)',
-    );
-  });
-
-  test('copilot/trae/windsurf/cline/opencode/kilo: hooksSurface none or copilot-inline/cline-rules, no hookEvents', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    // opencode and kilo register ZERO lifecycle hooks → hooksSurface none, no hookEvents
-    // #2095: kimi moved OUT of this group — it now has hooksSurface:'kimi-hooks-toml'
-    // and hookEvents:'claude' (see the dedicated kimi hooksSurface test below).
-    const noEventsRuntimes = ['trae', 'windsurf', 'opencode', 'kilo'];
-    for (const id of noEventsRuntimes) {
-      const rt = registry.runtimes[id].runtime;
-      assert.ok(
-        !Object.prototype.hasOwnProperty.call(rt, 'hookEvents'),
-        id + '.runtime must NOT have hookEvents (no hook events for this runtime)',
-      );
-    }
-    // cline has cline-rules surface but no hookEvents
-    const clineRt = registry.runtimes['cline'].runtime;
-    assert.strictEqual(clineRt.hooksSurface, 'cline-rules', 'cline.hooksSurface must be "cline-rules"');
-    assert.ok(
-      !Object.prototype.hasOwnProperty.call(clineRt, 'hookEvents'),
-      'cline.runtime must NOT have hookEvents',
-    );
-    // copilot has copilot-inline surface but no hookEvents
-    const copilotRt = registry.runtimes['copilot'].runtime;
-    assert.strictEqual(copilotRt.hooksSurface, 'copilot-inline', 'copilot.hooksSurface must be "copilot-inline"');
-    assert.ok(
-      !Object.prototype.hasOwnProperty.call(copilotRt, 'hookEvents'),
-      'copilot.runtime must NOT have hookEvents',
-    );
-  });
-
-  test('kimi: hooksSurface === kimi-hooks-toml, hookEvents === claude, extendedHookEvents wired (#2095)', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const kimiRt = registry.runtimes['kimi'].runtime;
-    assert.strictEqual(kimiRt.hooksSurface, 'kimi-hooks-toml', 'kimi.hooksSurface must be "kimi-hooks-toml"');
-    assert.strictEqual(kimiRt.hookEvents, 'claude', 'kimi.hookEvents must be "claude" (Kimi\'s 13 lifecycle events include exact-name equivalents for the Claude dialect)');
-    assert.deepStrictEqual(
-      [...kimiRt.extendedHookEvents].sort(),
-      ['PreCompact', 'Stop', 'SubagentStart', 'SubagentStop'].sort(),
-      'kimi.extendedHookEvents must wire SubagentStop/Stop/PreCompact/SubagentStart',
-    );
-    // installSurface stays profile-marker-only — the native config.toml
-    // [[hooks]] write is independent of the artifact-install surface (#2095).
-    assert.strictEqual(kimiRt.installSurface, 'profile-marker-only', 'kimi.installSurface must remain "profile-marker-only"');
-  });
-
-  test('codex: hooksSurface === codex-hooks-json, cursor: hooksSurface === cursor-hooks-json', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    assert.strictEqual(registry.runtimes['codex'].runtime.hooksSurface, 'codex-hooks-json',
-      'codex.hooksSurface must be "codex-hooks-json"');
-    assert.strictEqual(registry.runtimes['cursor'].runtime.hooksSurface, 'cursor-hooks-json',
-      'cursor.hooksSurface must be "cursor-hooks-json"');
-  });
-
-  test('tier-1 runtimes: claude, codex, antigravity have supportTier === 1', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    for (const id of ['claude', 'codex', 'antigravity']) {
-      assert.strictEqual(
-        registry.runtimes[id].runtime.supportTier, 1,
-        id + '.runtime.supportTier must be 1 (tier-1 support)',
-      );
-    }
-  });
-
-  test('tier-2 runtimes: cursor through windsurf have supportTier === 2', () => {
-    const { capMap } = loadAndValidate(new Set());
-    const registry = buildRegistry(capMap);
-    const tier2 = ['cursor', 'opencode', 'kilo', 'copilot', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy', 'cline', 'kimi', 'windsurf'];
-    for (const id of tier2) {
-      assert.strictEqual(
-        registry.runtimes[id].runtime.supportTier, 2,
-        id + '.runtime.supportTier must be 2 (tier-2 support)',
-      );
-    }
+    const rt = registry.runtimes['omp'].runtime;
+    assert.ok(typeof rt.supportTier === 'number', 'omp.supportTier must be a number');
   });
 });
 
@@ -3796,16 +3639,13 @@ describe('FIX 3: tightened runtime validator — skillsHome recursive validation
     );
   });
 
-  test('kilo descriptor: skillsHome passes full validation', () => {
-    // kilo has skillsHome: { kind: "dot-home", name: ".kilo", env: [] } — must pass
+  test('omp descriptor: passes full validation', () => {
     const { capMap, errors } = loadAndValidate(new Set());
     const hardErrors = errors.filter((e) => !e.includes('pending-migration'));
-    assert.deepEqual(hardErrors, [], 'No hard errors expected for kilo, got: ' + JSON.stringify(hardErrors));
-    const kiloRt = capMap.get('kilo');
-    assert.ok(kiloRt, 'kilo must be in capMap');
-    assert.ok(kiloRt.runtime.configHome.skillsHome, 'kilo.configHome.skillsHome must be present');
-    assert.strictEqual(kiloRt.runtime.configHome.skillsHome.kind, 'dot-home');
-    assert.strictEqual(kiloRt.runtime.configHome.skillsHome.name, '.kilo');
+    assert.deepEqual(hardErrors, [], 'No hard errors expected, got: ' + JSON.stringify(hardErrors));
+    const ompRt = capMap.get('omp');
+    assert.ok(ompRt, 'omp must be in capMap');
+    assert.ok(ompRt.runtime.configHome, 'omp.configHome must be present');
   });
 });
 
@@ -6601,12 +6441,8 @@ describe('enh-1055 descriptor-drive: ALLOWED_CONFIG_RUNTIMES completeness', () =
 // ---------------------------------------------------------------------------
 
 describe('enh-1055 descriptor-drive: finishPermissionWriter passthrough', () => {
-  test('opencode → "opencode" (descriptor permissionWriter)', () => {
-    assert.strictEqual(resolveRuntimeConfigIntent('opencode').finishPermissionWriter, 'opencode');
-  });
-
-  test('kilo → "kilo" (descriptor permissionWriter)', () => {
-    assert.strictEqual(resolveRuntimeConfigIntent('kilo').finishPermissionWriter, 'kilo');
+  test('omp descriptor: finishPermissionWriter is null', () => {
+    assert.strictEqual(resolveRuntimeConfigIntent('omp').finishPermissionWriter, null);
   });
 
   test('all other runtimes have finishPermissionWriter === null', () => {

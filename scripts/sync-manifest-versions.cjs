@@ -32,11 +32,7 @@ const ROOT = path.resolve(__dirname, '..');
 // guard test (issue 844) fails if you forget.
 // #1928: gemini-extension.json was removed with the gemini runtime (Google
 // sunset Gemini CLI 2026-06-18); it is no longer a registered manifest.
-const VERSIONED_MANIFESTS = [
-  { path: '.claude-plugin/plugin.json', versionKey: 'version' },
-  { path: '.claude-plugin/marketplace.json', versionKey: 'plugins.0.version' },
-  { path: 'vscode/package.json', versionKey: 'version' },
-];
+const VERSIONED_MANIFESTS = [];
 
 // Convenience: just the registered paths, for consumers that only need to
 // iterate files (e.g. the issue-844 regression-guard ALLOWED set).

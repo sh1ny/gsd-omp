@@ -45,8 +45,7 @@ const _require: NodeRequire = require;
 // ---------------------------------------------------------------------------
 
 type ArtifactKindName = 'commands' | 'agents' | 'skills';
-type KimiArtifactKindName = ArtifactKindName | 'kimi-agents';
-type OmpArtifactKindName = KimiArtifactKindName | 'rules' | 'extensions';
+type OmpArtifactKindName = ArtifactKindName | 'rules' | 'extensions';
 
 // Mirrors the (unexported) ResolvedProfile in install-profiles.cts.
 // Must stay in sync if that shape changes.
@@ -275,48 +274,6 @@ function convertedAgentsKind(
   };
 }
 
-function kimiAgentsKind(destSubpath: string, prefix: string, configDir: string): ArtifactKind {
-  return {
-    kind: 'kimi-agents',
-    destSubpath,
-    prefix,
-    stage: (resolved) => {
-      const buildKimiAgentArtifacts = conversionExports['buildKimiAgentArtifacts'] as (opts: {
-        rootAgent?: string;
-        subagents?: Array<{ path: string; content: string }>;
-      }) => {
-        root: { yaml: string; prompt: string };
-        subagents: Array<{ name: string; yaml: string; prompt: string }>;
-      };
-      const stagedAgents = stageAgentsForProfile(findAgentsSourceRoot(configDir), resolved);
-      const subagents: Array<{ path: string; content: string }> = [];
-      if (fs.existsSync(stagedAgents)) {
-        for (const entry of fs.readdirSync(stagedAgents, { withFileTypes: true })) {
-          if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-          const agentPath = path.join(stagedAgents, entry.name);
-          subagents.push({
-            path: posixNormalize(path.join('agents', entry.name)),
-            content: fs.readFileSync(agentPath, 'utf8'),
-          });
-        }
-      }
-
-      const rootAgent = `---\nname: gsd\ndescription: Run GSD workflows in Kimi CLI.\ntools: Agent\n---\n\n# GSD for Kimi CLI\n\nCoordinate installed /skill:gsd-* workflows and route work to generated GSD subagents when a workflow requires an agent handoff.\n`;
-      const artifacts = buildKimiAgentArtifacts({ rootAgent, subagents });
-      const stageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-kimi-agents-'));
-      installProfiles.STAGED_DIRS.add(stageDir);
-      fs.writeFileSync(path.join(stageDir, 'gsd.yaml'), artifacts.root.yaml);
-      fs.writeFileSync(path.join(stageDir, 'gsd.md'), artifacts.root.prompt);
-      const subagentsDir = path.join(stageDir, 'subagents');
-      fs.mkdirSync(subagentsDir, { recursive: true });
-      for (const artifact of artifacts.subagents) {
-        fs.writeFileSync(path.join(subagentsDir, `${artifact.name}.yaml`), artifact.yaml);
-        fs.writeFileSync(path.join(subagentsDir, `${artifact.name}.md`), artifact.prompt);
-      }
-      return stageDir;
-    },
-  };
-}
 
 function rulesKind(destSubpath: string, prefix: string, configDir: string): ArtifactKind {
   return {
@@ -550,9 +507,6 @@ function dispatchKindEntry(entry: ArtifactKindDescriptor, runtime: string, confi
       result = skillsKind(destSubpath, prefix, converter, runtime, configDir, nested, scope, capabilityRegistry);
       break;
 
-    case 'kimi-agents':
-      result = kimiAgentsKind(destSubpath, prefix, configDir);
-      break;
 
     case 'rules':
       result = rulesKind(destSubpath, prefix, configDir);

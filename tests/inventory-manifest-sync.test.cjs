@@ -24,7 +24,6 @@ const FAMILIES = [
   { name: 'workflows',   dir: path.join(ROOT, 'gsd-core', 'workflows'),        filter: (f) => f.endsWith('.md'),        toName: (f) => f },
   { name: 'references',  dir: path.join(ROOT, 'gsd-core', 'references'),       filter: (f) => f.endsWith('.md'),        toName: (f) => f },
   { name: 'cli_modules', dir: path.join(ROOT, 'gsd-core', 'bin', 'lib'),       filter: (f) => f.endsWith('.cjs'),       toName: (f) => f },
-  { name: 'hooks',       dir: path.join(ROOT, 'hooks'),                             filter: (f) => /\.(js|sh)$/.test(f),    toName: (f) => f },
 ];
 
 test('docs/INVENTORY-MANIFEST.json matches the filesystem', () => {

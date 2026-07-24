@@ -595,7 +595,7 @@ describe('resolveLoopHooks plan:post — pure function against real registry', (
     assert.strictEqual(result.activeHooks[0].capId, 'gap-analysis');
   });
 
-  test('[happy] real registry byLoopPoint plan:post has 1 step (mempalace), 2 contributions (external-job planner + claude-orchestration ultraplan ownership), and 1 gate (gap-analysis)', () => {
+  test('[happy] real registry byLoopPoint plan:post has 1 step (mempalace), 1 contribution (external-job planner), and 1 gate (gap-analysis)', () => {
     const entry = realRegistry.byLoopPoint['plan:post'];
     assert.ok(entry, 'plan:post must exist in byLoopPoint');
     assert.ok(Array.isArray(entry.steps), 'steps must be an array');
@@ -603,12 +603,10 @@ describe('resolveLoopHooks plan:post — pure function against real registry', (
     assert.ok(Array.isArray(entry.gates), 'gates must be an array');
     assert.strictEqual(entry.steps.length, 1, 'plan:post must have 1 step (mempalace capture)');
     assert.strictEqual(entry.steps[0].capId, 'mempalace', 'plan:post step must be from mempalace');
-    // #1143: claude-orchestration registers a plan:post contribution declaring
-    // ultraplan plan-offload ownership under its runtime gate (default-off).
-    assert.strictEqual(entry.contributions.length, 2, 'plan:post must have 2 contributions (external-job planner + claude-orchestration ultraplan ownership)');
+    assert.strictEqual(entry.contributions.length, 1, 'plan:post must have 1 contribution (external-job planner)');
     const capIds = entry.contributions.map(c => c.capId).sort();
-    assert.deepStrictEqual(capIds, ['claude-orchestration', 'external-job'],
-      `plan:post contributions must be external-job + claude-orchestration; got ${capIds.join(',')}`);
+    assert.deepStrictEqual(capIds, ['external-job'],
+      `plan:post contributions must be external-job; got ${capIds.join(',')}`);
     assert.strictEqual(entry.gates.length, 1, 'plan:post must have exactly one gate');
     assert.strictEqual(entry.gates[0].capId, 'gap-analysis');
   });

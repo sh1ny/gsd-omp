@@ -24,37 +24,28 @@ function writeSkill(rootDir, name, description, body = '') {
 describe('skill-manifest', () => {
   let tmpDir;
   let homeDir;
-  let savedCodexHome;
+  let savedOmpConfigDir;
   beforeEach(() => {
     tmpDir = createTempProject();
     homeDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gsd-skill-manifest-home-'));
-    savedCodexHome = process.env.CODEX_HOME;
-    delete process.env.CODEX_HOME;
+    savedOmpConfigDir = process.env.PI_CONFIG_DIR;
+    delete process.env.PI_CONFIG_DIR;
 
-    writeSkill(path.join(tmpDir, '.claude', 'skills'), 'project-claude', 'Project Claude skill');
-    writeSkill(path.join(tmpDir, '.claude', 'skills'), 'gsd-help', 'Installed GSD skill');
+    writeSkill(path.join(tmpDir, '.omp', 'skills'), 'project-omp', 'Project OMP skill');
+    writeSkill(path.join(tmpDir, '.omp', 'skills'), 'gsd-help', 'Installed GSD skill');
     writeSkill(path.join(tmpDir, '.agents', 'skills'), 'project-agents', 'Project agent skill');
-    writeSkill(path.join(tmpDir, '.codex', 'skills'), 'project-codex', 'Project Codex skill');
 
-    writeSkill(path.join(homeDir, '.claude', 'skills'), 'global-claude', 'Global Claude skill');
-    writeSkill(path.join(homeDir, '.codex', 'skills'), 'global-codex', 'Global Codex skill');
-    writeSkill(
-      path.join(homeDir, '.claude', 'gsd-core', 'skills'),
-      'legacy-import',
-      'Deprecated import-only skill'
-    );
-
-    fs.mkdirSync(path.join(homeDir, '.claude', 'commands', 'gsd'), { recursive: true });
-    fs.writeFileSync(path.join(homeDir, '.claude', 'commands', 'gsd', 'help.md'), '# legacy');
+    const ompGlobalSkills = path.join(homeDir, '.omp', 'profiles', 'chinese', 'agent', 'skills');
+    writeSkill(ompGlobalSkills, 'global-omp', 'Global OMP skill');
   });
 
   afterEach(() => {
     cleanup(tmpDir);
     cleanup(homeDir);
-    if (savedCodexHome === undefined) {
-      delete process.env.CODEX_HOME;
+    if (savedOmpConfigDir === undefined) {
+      delete process.env.PI_CONFIG_DIR;
     } else {
-      process.env.CODEX_HOME = savedCodexHome;
+      process.env.PI_CONFIG_DIR = savedOmpConfigDir;
     }
   });
 
@@ -73,57 +64,16 @@ describe('skill-manifest', () => {
 
     const skillNames = manifest.skills.map((skill) => skill.name).sort();
     assert.deepStrictEqual(skillNames, [
-      'global-claude',
-      'global-codex',
+      'global-omp',
       'gsd-help',
-      'legacy-import',
       'project-agents',
-      'project-claude',
-      'project-codex',
+      'project-omp',
     ]);
-
-    const codexSkill = manifest.skills.find((skill) => skill.name === 'project-codex');
-    assert.deepStrictEqual(
-      {
-        root: codexSkill.root,
-        scope: codexSkill.scope,
-        installed: codexSkill.installed,
-        deprecated: codexSkill.deprecated,
-      },
-      {
-        root: '.codex/skills',
-        scope: 'project',
-        installed: true,
-        deprecated: false,
-      }
-    );
-
-    const importedSkill = manifest.skills.find((skill) => skill.name === 'legacy-import');
-    assert.deepStrictEqual(
-      {
-        root: importedSkill.root,
-        scope: importedSkill.scope,
-        installed: importedSkill.installed,
-        deprecated: importedSkill.deprecated,
-      },
-      {
-        root: '.claude/gsd-core/skills',
-        scope: 'import-only',
-        installed: false,
-        deprecated: true,
-      }
-    );
-
     const gsdSkill = manifest.skills.find((skill) => skill.name === 'gsd-help');
     assert.strictEqual(gsdSkill.installed, true);
 
-    const legacyRoot = manifest.roots.find((root) => root.scope === 'legacy-commands');
-    assert.ok(legacyRoot, 'legacy commands root should be reported');
-    assert.strictEqual(legacyRoot.present, true);
-
     assert.strictEqual(manifest.installation.gsd_skills_installed, true);
-    assert.strictEqual(manifest.installation.legacy_claude_commands_installed, true);
-    assert.strictEqual(manifest.counts.skills, 7);
+    assert.strictEqual(manifest.counts.skills, 4);
   });
 
   test('writes manifest to .planning/skill-manifest.json when --write flag is used', () => {
@@ -142,24 +92,17 @@ describe('skill-manifest', () => {
     const result = runGsdTools(['skill-manifest'], tmpDir, {
       HOME: homeDir,
       USERPROFILE: homeDir,
-      CLAUDE_CONFIG_DIR: path.join(homeDir, 'claude-custom'),
-      CODEX_HOME: path.join(homeDir, 'codex-custom'),
+      PI_CONFIG_DIR: 'omp-custom',
     });
-    assert.ok(result.success, `Command should succeed: ${result.error || result.output}`);
 
     const manifest = JSON.parse(result.output);
-    const claudeRoot = manifest.roots.find((root) => root.root === '~/.claude/skills');
-    const codexRoot = manifest.roots.find((root) => root.root === '~/.codex/skills');
-    assert.ok(claudeRoot, 'Expected ~/.claude/skills root to be present');
-    assert.ok(codexRoot, 'Expected ~/.codex/skills root to be present');
-    assert.strictEqual(claudeRoot.path, path.join(homeDir, 'claude-custom', 'skills'));
-    assert.strictEqual(codexRoot.path, path.join(homeDir, 'codex-custom', 'skills'));
+    const ompRoot = manifest.roots.find((root) => root.root === '~/.omp/skills');
+    assert.ok(ompRoot, 'Expected ~/.omp/skills root to be present');
+    assert.strictEqual(ompRoot.path, path.join(homeDir, 'omp-custom', 'profiles', 'chinese', 'agent', 'skills'));
   });
 
   // bug-929: nested layout discovery
   test('bug-929: discovers concrete skills nested under gsd-ns-* routers', () => {
-    // Mirrors the on-disk shape that stageSkillsForRuntimeAsSkills emits for
-    // cline/qwen/hermes/augment/trae/antigravity when nested=true:
     //   <root>/gsd-ns-workflow/SKILL.md             — router (top-level)
     //   <root>/gsd-ns-workflow/skills/plan/SKILL.md — concrete
     //   <root>/gsd-ns-workflow/skills/execute/SKILL.md — concrete

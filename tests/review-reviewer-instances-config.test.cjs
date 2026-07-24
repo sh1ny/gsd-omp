@@ -19,14 +19,14 @@ describe('config-set review.reviewer_instances (#1517)', () => {
     const tmpDir = createTempProject('reviewer-instances-cli');
     t.after(() => cleanup(tmpDir));
 
-    const result = runGsdTools('config-set review.reviewer_instances.opencode-deepseek.cli opencode', tmpDir);
+    const result = runGsdTools('config-set review.reviewer_instances.gemini-deepseek.cli gemini', tmpDir);
     assert.ok(result.success, `config-set should accept the instance cli path: ${result.error || JSON.stringify(result)}`);
 
     const configPath = path.join(tmpDir, '.planning', 'config.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     assert.strictEqual(
-      config.review?.reviewer_instances?.['opencode-deepseek']?.cli,
-      'opencode',
+      config.review?.reviewer_instances?.['gemini-deepseek']?.cli,
+      'gemini',
       'instance cli must persist',
     );
   });

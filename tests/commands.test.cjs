@@ -1229,24 +1229,6 @@ describe('resolve-model command', () => {
   // #443: resolve-model now emits unified `effort` instead of `reasoning_effort`.
   // reasoning_effort was flavor-text (resolved but consumed by nobody); effort is
   // the wired, config-driven universal effort string for all runtimes.
-  test('emits unified effort (not reasoning_effort) when runtime supports tiered effort', () => {
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({
-      model_profile: 'balanced',
-      runtime: 'codex',
-      models: { planning: 'opus' },
-    }));
-    const result = runGsdTools('resolve-model gsd-planner', tmpDir);
-    assert.ok(result.success, `Command failed: ${result.error}`);
-
-    const output = JSON.parse(result.output);
-    assert.strictEqual(output.model, 'gpt-5.6-sol');
-    assert.strictEqual(output.profile, 'balanced');
-    // #443: effort is now the unified field (xhigh for gsd-planner heavy tier default)
-    assert.strictEqual(output.effort, 'xhigh');
-    // reasoning_effort must be absent — replaced by unified effort
-    assert.ok(!Object.prototype.hasOwnProperty.call(output, 'reasoning_effort'),
-      'reasoning_effort must not appear in resolve-model output (replaced by effort)');
-  });
 
   test('does not include reasoning_effort for unsupported runtime overrides (effort present instead)', () => {
     fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({

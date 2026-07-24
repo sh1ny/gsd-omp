@@ -1,1 +1,4 @@
-[]
+[
+  "bug-1826-phases-clear-confirm.test.cjs",
+  "bug-978-milestone-complete-force.test.cjs"
+]

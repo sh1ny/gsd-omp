@@ -128,12 +128,8 @@ describe('writesSharedSettings — descriptor-driven equivalence', () => {
 // ---------------------------------------------------------------------------
 
 describe('finishPermissionWriter', () => {
-  test('opencode -> "opencode"', () => {
-    assert.strictEqual(resolveRuntimeConfigIntent('opencode').finishPermissionWriter, 'opencode');
-  });
-
-  test('kilo -> "kilo"', () => {
-    assert.strictEqual(resolveRuntimeConfigIntent('kilo').finishPermissionWriter, 'kilo');
+  test('omp descriptor permissionWriter is null', () => {
+    assert.strictEqual(resolveRuntimeConfigIntent('omp').finishPermissionWriter, null);
   });
 
   test('every registry runtime whose descriptor permissionWriter is null/absent resolves to null', () => {
@@ -155,12 +151,7 @@ describe('finishPermissionWriter', () => {
 
 describe('installSurface correctness', () => {
   test('dedicated surfaces are stable (spot-check)', () => {
-    assert.strictEqual(resolveRuntimeConfigIntent('codex').installSurface, 'codex-toml');
-    assert.strictEqual(resolveRuntimeConfigIntent('copilot').installSurface, 'copilot-instructions');
-    assert.strictEqual(resolveRuntimeConfigIntent('cline').installSurface, 'cline-rules');
-    assert.strictEqual(resolveRuntimeConfigIntent('cursor').installSurface, 'cursor-hooks-json');
-    assert.strictEqual(resolveRuntimeConfigIntent('windsurf').installSurface, 'profile-marker-only');
-    assert.strictEqual(resolveRuntimeConfigIntent('trae').installSurface, 'profile-marker-only');
+    assert.strictEqual(resolveRuntimeConfigIntent('omp').installSurface, 'profile-marker-only');
   });
 
   test('every registry runtime resolves to its descriptor-declared installSurface', () => {
@@ -180,13 +171,13 @@ describe('installSurface correctness', () => {
 
 describe('resolveRuntimeConfigIntent — fresh object each call', () => {
   test('mutating the returned object does not affect a subsequent resolve', () => {
-    const first = resolveRuntimeConfigIntent('claude');
+    const first = resolveRuntimeConfigIntent('omp');
     first.installSurface = 'MUTATED';
-    first.writesSharedSettings = false;
+    first.writesSharedSettings = true;
 
-    const second = resolveRuntimeConfigIntent('claude');
-    assert.strictEqual(second.installSurface, 'settings-json');
-    assert.strictEqual(second.writesSharedSettings, true);
+    const second = resolveRuntimeConfigIntent('omp');
+    assert.strictEqual(second.installSurface, 'profile-marker-only');
+    assert.strictEqual(second.writesSharedSettings, false);
   });
 });
 
@@ -198,23 +189,12 @@ describe('resolveRuntimeConfigIntent — fresh object each call', () => {
 
 describe('ALLOWED_CONFIG_RUNTIMES completeness', () => {
   test('ALLOWED_CONFIG_RUNTIMES equals the registry runtimes that declare a real (non-"none") installSurface', () => {
-    // #2103: installSurface 'none' means "no CLI install surface at all"
-    // (e.g. vscode — Marketplace/VSIX-distributed, never CLI-installed), so
-    // it is excluded from the config-adapter runtime set by definition — this
-    // mirrors the exclusion already baked into the production
-    // ALLOWED_CONFIG_RUNTIMES filter (src/runtime-config-adapter-registry.cts).
     const descriptorAllowed = new Set(
       Object.entries(registry.runtimes)
         .filter(([, cap]) => cap && cap.runtime && typeof cap.runtime.installSurface === 'string' && cap.runtime.installSurface !== 'none')
         .map(([id]) => id),
     );
     assert.deepStrictEqual(new Set(ALLOWED_CONFIG_RUNTIMES), descriptorAllowed);
-  });
-
-  test('#2103: vscode declares installSurface "none" and is registered but intentionally excluded from ALLOWED_CONFIG_RUNTIMES', () => {
-    assert.strictEqual(registry.runtimes.vscode.runtime.installSurface, 'none');
-    assert.ok(!ALLOWED_CONFIG_RUNTIMES.has('vscode'),
-      'vscode must not be a config-adapter runtime — it has no CLI install surface');
   });
 
   test('every member of ALLOWED_CONFIG_RUNTIMES resolves without throwing', () => {
@@ -230,25 +210,18 @@ describe('ALLOWED_CONFIG_RUNTIMES completeness', () => {
 
 describe('INSTALL_SURFACES export', () => {
   const EXPECTED_SURFACES = new Set([
-    'settings-json',
-    'codex-toml',
-    'copilot-instructions',
-    'cline-rules',
-    'cursor-hooks-json',
     'profile-marker-only',
-    // 'none' added #2103 — vscode has no CLI install surface at all.
     'none',
   ]);
 
-  test('INSTALL_SURFACES contains exactly the 7 surface strings', () => {
+  test('INSTALL_SURFACES contains exactly the 2 surface strings', () => {
     assert.deepStrictEqual(new Set(INSTALL_SURFACES), EXPECTED_SURFACES);
   });
 });
 
 describe('resolveInstallPlan — hooksSurface is descriptor-owned', () => {
-  test('real descriptor-owned none surface is preserved for opencode and kilo', () => {
-    assert.strictEqual(resolveInstallPlan('opencode').hooksSurface, 'none');
-    assert.strictEqual(resolveInstallPlan('kilo').hooksSurface, 'none');
+  test('omp descriptor-owned none surface is preserved', () => {
+    assert.strictEqual(resolveInstallPlan('omp').hooksSurface, 'none');
   });
 
   test('synthetic descriptor resolves hooksSurface without runtime-name fallback', () => {

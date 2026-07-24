@@ -42,26 +42,7 @@ const RUNTIME_IDS = Object.keys(registry.runtimes);
 // declarative-cli:  antigravity, augment, codebuddy, codex, copilot, windsurf, zcode (7)
 // ide: vscode (1) — #2103, the first installed ide-profile host.
 const EXPECTED_PROFILES = {
-  claude:      'programmatic-cli',
-  cline:       'programmatic-cli',
-  cursor:      'programmatic-cli',
-  hermes:      'programmatic-cli',
-  kilo:        'programmatic-cli',
-  kimi:        'programmatic-cli',
-  'kimi-code': 'programmatic-cli',
-  opencode:    'programmatic-cli',
   omp:         'declarative-cli',
-  pi:          'programmatic-cli',
-  qwen:        'programmatic-cli',
-  trae:        'programmatic-cli',
-  antigravity: 'declarative-cli',
-  augment:     'declarative-cli',
-  codebuddy:   'declarative-cli',
-  codex:       'declarative-cli',
-  copilot:     'declarative-cli',
-  windsurf:    'declarative-cli',
-  zcode:       'declarative-cli',
-  vscode:      'ide',
 };
 
 describe('ADR-1239 Phase A: hostIntegration descriptors', () => {
@@ -269,45 +250,10 @@ describe('ADR-1239 Phase A: hostIntegration descriptors', () => {
 
   // ─── shouldFlattenDispatch per-host (#853 discriminator) ─────────────────────
 
-  // Expected: false (may background) for codex, cursor, kimi, and opencode;
-  // true (must inline) for the other 13.
-  const EXPECTED_FLATTEN = {
-    antigravity: true,
-    augment:     true,
-    claude:      true,
-    cline:       true,
-    codebuddy:   true,
-    codex:       false,
-    copilot:     true,
-    cursor:      false,
-    hermes:      true,
-    kilo:        true,
-    // #2095: Kimi Upgrade 2 — Kimi's Agent tool takes a run_in_background
-    // call-time param (Context7 agents.html) → backgroundDispatch flipped to
-    // true → dispatch.background/backgroundDispatch both true → NOT
-    // force-flattened (mirrors the #2087 OpenCode precedent below).
-    kimi:        false,
-    // #2454: Kimi Code (Node CLI) — same background-dispatch model as Python
-    // kimi-cli per Kimi Code docs (dispatch.background/backgroundDispatch both
-    // true) → NOT force-flattened.
-    'kimi-code': false,
-    // #2087: OpenCode background subagents (v1.15 param, v1.17 default-on) →
-    // dispatch.background/backgroundDispatch true → NOT force-flattened.
-  opencode:    false,
   // OMP: dispatch.background/backgroundDispatch both true (hub background jobs)
   // → NOT force-flattened.
-  omp:         false,
-  // #2102: pi's dispatch.background/backgroundDispatch are both false
-    // (undocumented background-subagent primitive) → force-flattened.
-    pi:          true,
-    qwen:        true,
-    trae:        true,
-    windsurf:    true,
-    zcode:       true,
-    // #2103: vscode's dispatch.backgroundDispatch is 'undocumented' (no
-    // documented background-subagent primitive) → fails closed to false →
-    // force-flattened, mirroring the pi (#2102) precedent above.
-    vscode:      true,
+  const EXPECTED_FLATTEN = {
+    omp:         false,
   };
 
   for (const id of RUNTIME_IDS) {
@@ -325,9 +271,6 @@ describe('ADR-1239 Phase A: hostIntegration descriptors', () => {
   }
 
   test('contract-pin: background-eligible set matches EXPECTED_FLATTEN (count-agnostic)', () => {
-    // The eligible set is DERIVED from the curated EXPECTED_FLATTEN map rather
-    // than hand-pinned to a fixed pair, so a runtime whose dispatch axes change
-    // updates the expectation automatically.
     const expectedEligible = RUNTIME_IDS
       .filter((id) => EXPECTED_FLATTEN[id] === false)
       .sort();
@@ -340,12 +283,9 @@ describe('ADR-1239 Phase A: hostIntegration descriptors', () => {
       'background-eligible set must match EXPECTED_FLATTEN (a dispatch axis may have flipped)');
   });
 
-  test('contract-pin: spot-check claude→programmatic-cli, codex→declarative-cli, opencode→programmatic-cli, windsurf→declarative-cli', () => {
+  test('contract-pin: spot-check omp→declarative-cli', () => {
     const checks = [
-      ['claude', 'programmatic-cli'],
-      ['codex', 'declarative-cli'],
-      ['opencode', 'programmatic-cli'],
-      ['windsurf', 'declarative-cli'],
+      ['omp', 'declarative-cli'],
     ];
     for (const [id, expectedProfile] of checks) {
       const cap = registry.runtimes[id];

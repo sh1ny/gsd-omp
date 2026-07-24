@@ -15,22 +15,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const FALLBACK_ALIASES: Readonly<Record<string, string[]>> = {
-  claude: ['claude', 'claude-code', 'claude-cli'],
-  opencode: ['opencode', 'open-code', 'opencode-cli'],
-  kilo: ['kilo', 'kilo-cli'],
-  codex: ['codex', 'codex-app', 'codex-cli', 'codex_desktop', 'codex-desktop'],
-  copilot: ['copilot', 'copilot-cli', 'github-copilot'],
-  antigravity: ['antigravity', 'antigravity-cli', 'antigravity-agent'],
-  cursor: ['cursor', 'cursor-cli', 'cursor-nightly'],
-  windsurf: ['windsurf', 'windsurf-cli', 'windsurf-next', 'devin-desktop'],
-  augment: ['augment', 'augment-code', 'augment-cli'],
-  trae: ['trae', 'trae-cli'],
-  qwen: ['qwen', 'qwen-code', 'qwen-cli'],
-  hermes: ['hermes', 'hermes-agent', 'hermes-cli'],
-  kimi: ['kimi'],
-  'kimi-code': ['kimi-code', 'kimicode', 'kimi_code'],
-  codebuddy: ['codebuddy', 'codebuddy-cli'],
-  cline: ['cline', 'cline-cli'],
   omp: ['omp', 'oh-my-pi', 'oh-my-pi-cli'],
 };
 
@@ -202,64 +186,23 @@ export function getDirName(runtime: string): string {
  * by canonical runtime id. The SINGLE source of truth consumed by both
  * `install()` and `uninstall()` in bin/install.js via `getRuntimeLabel`.
  *
- * Collapses the two duplicated `runtimeLabel` assignment chains that previously
- * lived inline in bin/install.js (ADR-1239 Phase B, #1679) — the add-a-host tax:
- * a new runtime meant remembering to add a label line in BOTH chains, and they
- * had drifted out of sync (uninstall omitted `cline` and used a different
- * `kimi` value than install). This table is the curated canonical resolution:
- *   - kimi:  install 'Kimi' / uninstall 'Kimi CLI'  → 'Kimi CLI' (majority + descriptor title)
- *   - cline: install 'Cline' / uninstall (omitted)  → 'Cline'    (majority + descriptor title)
- *
- * Voice: these are the SHORT UI labels, intentionally distinct from the
- * descriptor `title` (the long product name — e.g. "OpenAI Codex CLI",
- * "GitHub Copilot") which serves documentation/registry display,
- * not the install console. A future slice may relocate this to a
- * `runtime.label` descriptor field; until then this table is the source.
- *
- * Lookup is RAW-ID only (no alias expansion) — callers pass an already-
- * canonicalized runtime id, keeping the label surface explicit. Unknown/empty
- * ids fall back to 'Claude Code' (the always-safe default, fail-closed).
- *
  * The drift-guard test (tests/runtime-label-policy.test.cjs) pins this table's
  * id set to the capability-registry runtime id set, so adding/removing a runtime
  * forces a deliberate update here.
  */
 const RUNTIME_LABELS: Readonly<Record<string, string>> = {
-  claude: 'Claude Code',
-  opencode: 'OpenCode',
-  kilo: 'Kilo',
-  codex: 'Codex',
-  copilot: 'Copilot',
-  antigravity: 'Antigravity',
-  cursor: 'Cursor',
-  windsurf: 'Windsurf',
-  augment: 'Augment',
-  trae: 'Trae',
-  qwen: 'Qwen Code',
-  hermes: 'Hermes Agent',
-  kimi: 'Kimi CLI',
-  'kimi-code': 'Kimi Code',
-  codebuddy: 'CodeBuddy',
-  cline: 'Cline',
-  zcode: 'ZCode',
-  pi: 'pi',
   omp: 'Oh My Pi',
-  // #2103: vscode is a registered (role:runtime) capability for validator +
-  // host-integration coverage, even though it is never CLI-installed (no
-  // --vscode flag — see NON_INSTALLABLE_RUNTIMES in tests/runtime-flags.test.cjs).
-  // A distinct label is still required by the drift guard below.
-  vscode: 'VS Code',
 };
 
 /**
  * Map a canonical runtime id to its short display label for the
  * install/uninstall console output. Unknown/empty inputs fall back to
- * 'Claude Code'. Sibling to `getDirName`; pure (no I/O).
+ * 'Oh My Pi'. Sibling to `getDirName`; pure (no I/O).
  */
 export function getRuntimeLabel(runtime: string): string {
-  if (!runtime) return 'Claude Code';
+  if (!runtime) return 'Oh My Pi';
   const label = RUNTIME_LABELS[runtime];
-  return typeof label === 'string' && label.length > 0 ? label : 'Claude Code';
+  return typeof label === 'string' && label.length > 0 ? label : 'Oh My Pi';
 }
 
 /**
@@ -268,50 +211,17 @@ export function getRuntimeLabel(runtime: string): string {
  * generated hook scripts. Each value is a JS-source snippet (embedded quotes /
  * commas are intentional — it is spliced into generated code as path.join args).
  *
- * Collapses the prior 14-branch `if (runtime === 'x') return "'...'"` chain in
- * bin/install.js (ADR-1239 Phase B / #1679, AC2 slice 2) — the add-a-host tax:
- * a new runtime meant remembering to add a branch here. Values are preserved
- * BYTE-FOR-BYTE from the prior chain; golden install parity asserts generated
- * hook output is unchanged across all 15 runtimes.
- *
- * Two runtimes are intentionally absent (handled by the caller, NOT this table):
- *   - `claude`     → the default; falls through to `DEFAULT_FRAGMENT`.
- *   - `antigravity`→ resolved dynamically via resolveAntigravityGlobalDir +
- *                    path.relative (multi-segment, env-overridable).
- *
- * Unknown/empty ids fall back to the default (`.claude`).
+ * Unknown/empty ids fall back to the default (`.omp`, `agent`).
  */
-const DEFAULT_CONFIG_HOME_FRAGMENT = "'.claude'";
+const DEFAULT_CONFIG_HOME_FRAGMENT = "'.omp', 'agent'";
 const GLOBAL_CONFIG_HOME_FRAGMENTS: Readonly<Record<string, string>> = {
-  copilot:   "'.copilot'",
-  opencode:  "'.config', 'opencode'",
-  kilo:      "'.config', 'kilo'",
-  codex:     "'.codex'",
-  cursor:    "'.cursor'",
-  windsurf:  "'.windsurf'",
-  augment:   "'.augment'",
-  trae:      "'.trae'",
-  qwen:      "'.qwen'",
-  hermes:    "'.hermes'",
-  codebuddy: "'.codebuddy'",
-  cline:     "'.cline'",
-  kimi:      "'.config', 'agents'",
-  'kimi-code': "'.kimi-code'",
-  zcode:     "'.zcode'",
-  // pi's global config home is ~/.pi/agent (configHome: dot-home-nested,
-  // parent '.pi', name 'agent' — capabilities/pi/capability.json), matching
-  // resolveConfigHomeFromDescriptor's `path.join(home, parent, name)` for the
-  // no-probe dot-home-nested case (src/runtime-homes.cts). Two-segment
-  // path.join args, same shape as opencode/kilo/kimi above.
-  pi:        "'.pi', 'agent'",
-  omp:       "'.omp', 'agent'",
+  omp: "'.omp', 'agent'",
 };
 
 /**
  * Return the global config-home path-fragment source snippet for a runtime
- * (for hook path.join() codegen). `claude`/unknown/empty → the default
- * `'.claude'` fragment. `antigravity` is NOT handled here (caller resolves it
- * dynamically). Pure: no I/O. Sibling to `getDirName` / `getRuntimeLabel`.
+ * (for hook path.join() codegen). Unknown/empty → the default `'.omp', 'agent'`
+ * fragment. Pure: no I/O. Sibling to `getDirName` / `getRuntimeLabel`.
  */
 export function getGlobalConfigHomeFragment(runtime: string): string {
   if (!runtime) return DEFAULT_CONFIG_HOME_FRAGMENT;
@@ -321,19 +231,10 @@ export function getGlobalConfigHomeFragment(runtime: string): string {
 
 /**
  * The runtime ids for which `bin/install.js` needs an `is<Runtime>` boolean
- * predicate (every installed host that takes a non-claude install branch).
- * Single source of truth — adding a runtime is one entry here, not a per-
- * function declaration block (the add-a-host tax ADR-1239 Phase B / #1679 AC2
- * removes).
+ * predicate. Single source of truth — adding a runtime is one entry here.
  */
-// #2094: 'trae' stays here — bin/install.js's agents-converter dispatch
-// (convertClaudeAgentToTraeAgent selection) still reads isTrae directly.
-// Removing it is gated on migrating that runtime-keyed `else if` chain to a
-// cross-runtime agents-dispatch table (out of scope for #2094, which only
-// folds the shared-hooks-install skip).
 const RUNTIME_FLAG_IDS = Object.freeze([
-  'opencode', 'kilo', 'codex', 'copilot', 'antigravity', 'cursor',
-  'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy', 'cline', 'kimi', 'kimi-code', 'zcode', 'pi', 'omp',
+  'omp',
 ] as const);
 
 /**
@@ -363,18 +264,11 @@ export function runtimeFlags(runtime: string): Readonly<Record<string, boolean>>
 }
 
 /**
- * The `/gsd-new-project` invocation syntax per runtime — the post-install
- * "next step" command string. Most runtimes use the default `/gsd-new-project`;
- * a few hosts need a different surface syntax. Collapses the 14-line
- * `if (runtime === 'x') command = ...` chain in bin/install.js's next-step
- * message (ADR-1239 Phase B / #1679 AC2). Pure: no I/O.
+ * The `/gsd-new-project` invocation syntax — the post-install "next step"
+ * command string. Pure: no I/O.
  */
 const DEFAULT_NEW_PROJECT_COMMAND = '/gsd-new-project';
-const RUNTIME_NEW_PROJECT_COMMANDS: Readonly<Record<string, string>> = {
-  codex: '$gsd-new-project',
-  cursor: 'gsd-new-project (mention the skill name)',
-  kimi: '/skill:gsd-new-project',
-};
+const RUNTIME_NEW_PROJECT_COMMANDS: Readonly<Record<string, string>> = {};
 
 export function getRuntimeNewProjectCommand(runtime: string): string {
   if (!runtime) return DEFAULT_NEW_PROJECT_COMMAND;

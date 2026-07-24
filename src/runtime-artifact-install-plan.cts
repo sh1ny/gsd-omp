@@ -12,7 +12,7 @@
 const _require: NodeRequire = require;
 const path = _require('node:path') as typeof import('node:path');
 
-type ArtifactKindName = 'commands' | 'agents' | 'skills' | 'kimi-agents';
+type ArtifactKindName = 'commands' | 'agents' | 'skills';
 type InstallScope = 'local' | 'global';
 
 interface ResolvedProfile {
@@ -61,7 +61,6 @@ interface Dependencies {
 
 interface ComputePathPrefixOpts {
   isGlobal: boolean;
-  isOpencode: boolean;
   isWindowsHost: boolean;
   resolvedTarget: string;
   homeDir: string;
@@ -182,9 +181,8 @@ function createRuntimeArtifactInstallPlan(args: CreateRuntimeArtifactInstallPlan
   const resolvedTarget = posixNormalize(path.resolve(layout.configDir));
   const homeDir = posixNormalize(homedirFn());
   const isGlobal = scope === 'global';
-  const isOpencode = layout.runtime === 'opencode';
   const isWindowsHost = (platform ?? process.platform) === 'win32';
-  const pathPrefix = conversionExports._computePathPrefix({ isGlobal, isOpencode, isWindowsHost, resolvedTarget, homeDir });
+  const pathPrefix = conversionExports._computePathPrefix({ isGlobal, isWindowsHost, resolvedTarget, homeDir });
   const attribution = resolveAttribution ? resolveAttribution(layout.runtime) : undefined;
   const agentCtx: AgentCtx = { runtime: layout.runtime, pathPrefix, attribution };
 
@@ -208,7 +206,7 @@ function createRuntimeArtifactInstallPlan(args: CreateRuntimeArtifactInstallPlan
       if (kind.kind === 'commands') {
         const rewrittenDir = rewriteStagedCommandBodies(stagedDir, rewriteOpts);
         sourceDir = addCleanupDir(cleanupDirs, stagedDir, rewrittenDir);
-      } else if (kind.kind === 'skills' || kind.kind === 'kimi-agents') {
+      } else if (kind.kind === 'skills') {
         const rewrittenDir = rewriteStagedSkillBodies(stagedDir, rewriteOpts);
         sourceDir = addCleanupDir(cleanupDirs, stagedDir, rewrittenDir);
       }

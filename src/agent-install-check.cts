@@ -30,19 +30,17 @@ interface AgentsInstalledResult {
  * Resolve the agents directory for the given runtime.
  *
  * Priority:
- *   1. GSD_AGENTS_DIR env var (explicit override, any runtime)
- *   2. For claude runtime: __dirname-relative path (agents/ sibling of gsd-core/)
- *      This is correct for both repo runs and real installs (the runtime config dir's
- *      agents/ folder) because gsd-tools.cjs lives inside gsd-core/bin/ in both cases.
- *   3. For non-claude runtimes: getGlobalConfigDir(runtime)/agents
+ *   1. GSD_AGENTS_DIR env var (explicit override)
+ *   2. Local install dir: <projectDir>/.omp/agents/
+ *   3. Global config dir: getGlobalConfigDir(runtime)/agents
  *
- * @param runtime - the active runtime name; defaults to GSD_RUNTIME env, then 'claude'
+ * @param runtime - the active runtime name; defaults to GSD_RUNTIME env, then 'omp'
  */
 function getAgentsDir(runtime?: string, projectDir?: string): string {
   if (process.env['GSD_AGENTS_DIR']) {
     return process.env['GSD_AGENTS_DIR'];
   }
-  const resolved = runtime ?? (process.env['GSD_RUNTIME'] || 'claude');
+  const resolved = runtime ?? (process.env['GSD_RUNTIME'] || 'omp');
   // Check local install dir first: <projectDir>/.<dirName>/agents/
   if (projectDir) {
     const dirName = getDirName(resolved);
@@ -57,11 +55,11 @@ function getAgentsDir(runtime?: string, projectDir?: string): string {
 /**
  * Check which GSD agents are installed on disk.
  *
- * @param runtime - the active runtime name; defaults to GSD_RUNTIME env, then 'claude'
+ * @param runtime - the active runtime name; defaults to GSD_RUNTIME env, then 'omp'
  * @param projectDir - project root dir; when provided, checks local install dir first
  */
 function checkAgentsInstalled(runtime?: string, projectDir?: string): AgentsInstalledResult {
-  const resolvedRuntime = runtime ?? (process.env['GSD_RUNTIME'] || 'claude');
+  const resolvedRuntime = runtime ?? (process.env['GSD_RUNTIME'] || 'omp');
   // If the resolved runtime's agents dir doesn't exist locally, check the
   // .gsd-runtime install marker — config.json's runtime field can drift from
   // the actual install (e.g. config says "pi" but the install was --omp).
@@ -74,7 +72,7 @@ function checkAgentsInstalled(runtime?: string, projectDir?: string): AgentsInst
     const localAgentsDir = path.join(projectDir, resolvedDirName, 'agents');
     if (!fs.existsSync(localAgentsDir)) {
       // Scan common local install dirs for a .gsd-runtime marker
-      for (const dirName of ['.omp', '.pi', '.claude', '.opencode', '.kilo', '.codex', '.copilot', '.cursor', '.windsurf', '.augment', '.trae', '.qwen', '.hermes', '.codebuddy', '.cline', '.zcode']) {
+      for (const dirName of ['.omp']) {
         const markerPath = path.join(projectDir, dirName, 'gsd-core', '.gsd-runtime');
         try {
           if (fs.existsSync(markerPath)) {
@@ -109,20 +107,7 @@ function checkAgentsInstalled(runtime?: string, projectDir?: string): AgentsInst
 
   for (const agent of expectedAgents) {
     const agentFile = path.join(agentsDir, `${agent}.md`);
-    const agentFileCopilot = path.join(agentsDir, `${agent}.agent.md`);
-    const agentFileCodex = path.join(agentsDir, `${agent}.toml`);
-    const agentFileKimiYaml = path.join(agentsDir, 'subagents', `${agent}.yaml`);
-    const agentFileKimiPrompt = path.join(agentsDir, 'subagents', `${agent}.md`);
-    const kimiAgentInstalled =
-      resolvedRuntime === 'kimi' &&
-      fs.existsSync(agentFileKimiYaml) &&
-      fs.existsSync(agentFileKimiPrompt);
-    if (
-      fs.existsSync(agentFile) ||
-      fs.existsSync(agentFileCopilot) ||
-      fs.existsSync(agentFileCodex) ||
-      kimiAgentInstalled
-    ) {
+    if (fs.existsSync(agentFile)) {
       installed.push(agent);
     } else {
       missing.push(agent);

@@ -50,13 +50,23 @@ const runtimeArtifactConversion = require('../gsd-core/bin/lib/runtime-artifact-
 // records exactly the same set that build-hooks.js copies to hooks/dist/, making
 // the manifest and the installed hooks/ dir structurally identical. Avoids the
 // prefix/extension-regex approach that missed managed-hooks-registry.cjs (#941).
-const { HOOKS_TO_COPY: _HOOKS_TO_COPY } = require('../scripts/build-hooks.js');
+// OMP only: scripts/build-hooks.js was removed (the OMP descriptor declares
+// skipSharedHooksInstall: true and hooksSurface: "none"). The hook-file
+// roster is empty for OMP, so the Set below is empty and no hook files
+// are ever written or removed by install.js.
+const _HOOKS_TO_COPY = [];
 const INSTALLED_HOOK_FILES = new Set(_HOOKS_TO_COPY);
 
 // ADR-857 phase 5f-1: hook-surface writer functions extracted to a dedicated module.
 // bin/install.js re-exports everything from hooksSurface so existing callers
 // (require('../bin/install.js').writeCursorHooksJson etc.) continue to work.
-const hooksSurface = require('../gsd-core/bin/lib/runtime-hooks-surface.cjs');
+// OMP only: runtime-hooks-surface.cjs was removed (the OMP descriptor declares
+// hooksSurface: "none"). Stub the module so existing hooksSurface.* call sites
+// in this file return safe no-ops instead of throwing ReferenceError at load.
+// None of these methods are reachable for omp: the descriptor-driven branches
+// (resolveInstallPlan(...).hooksSurface etc.) never return values that route
+// into any of these writer calls.
+const hooksSurface = new Proxy({}, { get: (_target, prop) => { if (prop === '__esModule' || prop === 'default') return hooksSurface; if (prop === 'atomicWriteFileSync' || prop === '__atomicWrittenTmps') return undefined; return () => undefined; } });
 
 /**
  * #3677 predicate — true when an agent body needs `/gsd:<cmd>` → `/gsd-<cmd>`
@@ -164,7 +174,7 @@ function isCodexHooksFeatureKey(key) {
 // GSD entries are appended only when not already present (idempotent).
 // The reference/default runtime (ADR-1239 reference host). Single-sourced here
 // instead of scattered literal 'claude' defaults/rosters (#2086).
-const DEFAULT_RUNTIME = 'claude';
+const DEFAULT_RUNTIME = 'omp';
 const GSD_CLAUDE_ALLOW_PERMISSIONS = Object.freeze([
   'Bash(npx gsd-core *)',
   'Read(.planning/*)',
@@ -447,7 +457,7 @@ try {
 // `settings.json` instead of the gitignored `settings.local.json` (#338) — leaking
 // engineer-specific absolute paths. Keyed by runtime id (a DATA lookup, not a
 // hardcoded string-equality branch) so behavior degrades CLOSED (safe), never open.
-// The live descriptor (capabilities/claude/capability.json) remains the source of
+// The live descriptor (capabilities/omp/capability.json) remains the source of
 // truth; this mirrors only the privacy-load-bearing subset. (ADR-1239 / #2086)
 const FALLBACK_HOST_BEHAVIORS = Object.freeze({
   claude: Object.freeze({
@@ -624,41 +634,30 @@ if (hasMinimal && _profileArgRaw) {
   console.error(`  ${yellow}Cannot specify both --minimal/--core-only and --profile${reset}`);
   process.exit(1);
 }
-
 function selectRuntimesFromArgs(runtimeArgs) {
   if (runtimeArgs.includes('--all')) {
-    return ['claude', 'kimi', 'kimi-code', 'kilo', 'opencode', 'omp', 'pi', 'codex', 'copilot', 'antigravity', 'cursor', 'windsurf', 'augment', 'trae', 'qwen', 'hermes', 'codebuddy', 'cline', 'zcode'];
+    return ['omp'];
   }
-  if (runtimeArgs.includes('--both')) {
-    return ['claude', 'opencode'];
-  }
-
   const selected = [];
-  if (runtimeArgs.includes('--claude')) selected.push('claude');
-  if (runtimeArgs.includes('--opencode')) selected.push('opencode');
-  if (runtimeArgs.includes('--pi')) selected.push('pi');
-  if (runtimeArgs.includes('--kilo')) selected.push('kilo');
   if (runtimeArgs.includes('--omp')) selected.push('omp');
-  if (runtimeArgs.includes('--codex')) selected.push('codex');
-  if (runtimeArgs.includes('--copilot')) selected.push('copilot');
-  if (runtimeArgs.includes('--antigravity')) selected.push('antigravity');
-  if (runtimeArgs.includes('--cursor')) selected.push('cursor');
-  if (runtimeArgs.includes('--windsurf') || runtimeArgs.includes('--devin-desktop')) selected.push('windsurf');
-  if (runtimeArgs.includes('--augment')) selected.push('augment');
-  if (runtimeArgs.includes('--trae')) selected.push('trae');
-  if (runtimeArgs.includes('--qwen')) selected.push('qwen');
-  if (runtimeArgs.includes('--hermes')) selected.push('hermes');
-  if (runtimeArgs.includes('--kimi')) selected.push('kimi');
-  if (runtimeArgs.includes('--kimi-code')) selected.push('kimi-code');
-  if (runtimeArgs.includes('--codebuddy')) selected.push('codebuddy');
-  if (runtimeArgs.includes('--cline')) selected.push('cline');
-  if (runtimeArgs.includes('--zcode')) selected.push('zcode');
   return selected;
 }
 
 // Runtime selection - can be set by flags or interactive prompt
 let selectedRuntimes = selectRuntimesFromArgs(args);
 
+// Fail loud on removed runtime flags — this GSD fork supports OMP only.
+const REMOVED_RUNTIME_FLAGS = [
+  '--claude', '--codex', '--opencode', '--cursor', '--windsurf', '--kilo',
+  '--kimi', '--kimi-code', '--copilot', '--antigravity', '--augment', '--trae',
+  '--qwen', '--hermes', '--cline', '--codebuddy', '--zcode', '--pi', '--gemini',
+];
+for (const flag of REMOVED_RUNTIME_FLAGS) {
+  if (args.includes(flag)) {
+    console.error(`Error: --${flag.slice(2)} is not supported. This GSD fork supports OMP only.`);
+    process.exit(1);
+  }
+}
 // #2505 Phase 5: Kimi variant disambiguation (#2513). Kimi CLI (Python, ~/.kimi/)
 // and Kimi Code (Node, ~/.kimi-code/) are two distinct Moonshot products that
 // share the "kimi" brand. Probe for each product's config.toml and warn when
@@ -799,7 +798,7 @@ function getConfigDirFromHome(runtime, isGlobal) {
   // entry. (The prior inner `if (!isGlobal) return "'.agents'"` was unreachable:
   // !isGlobal returns at the top of this function.)
   // Descriptor-driven (ADR-1239 / #2096): folded from a hardcoded
-  // `runtime === 'antigravity'` literal into a read of the runtime's
+  // `runtime === <removed>` literal into a read of the runtime's
   // `hostBehaviors.globalDirResolver` descriptor field (via _hostBehaviors, which
   // also degrades to FALLBACK_HOST_BEHAVIORS on registry-load failure). This is
   // antigravity-unique: unlike `configHome.kind === 'dot-home-nested'` (which
@@ -840,7 +839,7 @@ const banner = '\n' +
   '  GSD Core ' + dim + 'v' + pkg.version + reset + '\n' +
   '  Git. Ship. Done.\n' +
   '  A meta-prompting, context engineering and spec-driven\n' +
-  '  development workflows for Claude Code, OpenCode, Kimi CLI, Kilo, Codex, Copilot, Antigravity, Cursor, Windsurf, Augment, Trae, Qwen Code, Hermes Agent, Cline, CodeBuddy, ZCode and pi.\n';
+  '  development workflow for Oh My Pi.\n';
 
 // Pure seam: parse --config-dir / -c from an arbitrary args array.
 // Returns the path string, '' for an empty equals-form value, or null when the
@@ -897,7 +896,7 @@ if (hasUninstall) {
 
 // Show help if requested
 if (hasHelp) {
-  console.log(`  ${yellow}Usage:${reset} npx ${pkg.name} [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--claude${reset}                  Install for Claude Code only\n    ${cyan}--opencode${reset}                Install for OpenCode only\n    ${cyan}--kilo${reset}                    Install for Kilo only\n    ${cyan}--codex${reset}                   Install for Codex only\n    ${cyan}--kimi${reset}                    Install for Kimi CLI only\n    ${cyan}--copilot${reset}                 Install for Copilot only\n    ${cyan}--antigravity${reset}             Install for Antigravity only\n    ${cyan}--cursor${reset}                  Install for Cursor only\n    ${cyan}--windsurf${reset}                Install for Windsurf only\n    ${cyan}--augment${reset}                 Install for Augment only\n    ${cyan}--trae${reset}                    Install for Trae only\n    ${cyan}--qwen${reset}                    Install for Qwen Code only\n    ${cyan}--hermes${reset}                  Install for Hermes Agent only\n    ${cyan}--cline${reset}                   Install for Cline only\n    ${cyan}--codebuddy${reset}              Install for CodeBuddy only\n    ${cyan}--zcode${reset}                  Install for ZCode only\n    ${cyan}--all${reset}                     Install for all runtimes\n    ${cyan}-u, --uninstall${reset}           Uninstall GSD (remove all GSD files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also GSD_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — ${PROFILES.core.length} main-loop skills incl. phase (~130 desc tokens)\n                              standard — ${PROFILES.standard.length} skills incl. phase, review, config (~700)\n                              full     — all skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`gsd update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Interactive install (prompts for runtime and location)${reset}\n    npx ${pkg.name}\n\n    ${dim}# Install for Claude Code globally${reset}\n    npx ${pkg.name} --claude --global\n\n    ${dim}# Install for Kilo globally${reset}\n    npx ${pkg.name} --kilo --global\n\n    ${dim}# Install for Codex globally${reset}\n    npx ${pkg.name} --codex --global\n\n    ${dim}# Install for Kimi CLI globally${reset}\n    npx ${pkg.name} --kimi --global\n\n    ${dim}# Install for Kimi CLI under ~/.kimi-code${reset}\n    npx ${pkg.name} --kimi --global --config-dir ~/.kimi-code\n\n    ${dim}# Install for Copilot globally${reset}\n    npx ${pkg.name} --copilot --global\n\n    ${dim}# Install for Copilot locally${reset}\n    npx ${pkg.name} --copilot --local\n\n    ${dim}# Install for Antigravity globally${reset}\n    npx ${pkg.name} --antigravity --global\n\n    ${dim}# Install for Antigravity locally${reset}\n    npx ${pkg.name} --antigravity --local\n\n    ${dim}# Install for Cursor globally${reset}\n    npx ${pkg.name} --cursor --global\n\n    ${dim}# Install for Cursor locally${reset}\n    npx ${pkg.name} --cursor --local\n\n    ${dim}# Install for Windsurf globally${reset}\n    npx ${pkg.name} --windsurf --global\n\n    ${dim}# Install for Windsurf locally${reset}\n    npx ${pkg.name} --windsurf --local\n\n    ${dim}# Install for Augment globally${reset}\n    npx ${pkg.name} --augment --global\n\n    ${dim}# Install for Augment locally${reset}\n    npx ${pkg.name} --augment --local\n\n    ${dim}# Install for Trae globally${reset}\n    npx ${pkg.name} --trae --global\n\n    ${dim}# Install for Trae locally${reset}\n    npx ${pkg.name} --trae --local\n\n    ${dim}# Install for Hermes Agent globally${reset}\n    npx ${pkg.name} --hermes --global\n\n    ${dim}# Install for Hermes Agent locally${reset}\n    npx ${pkg.name} --hermes --local\n\n    ${dim}# Install for Cline globally${reset}\n    npx ${pkg.name} --cline --global\n\n    ${dim}# Install for Cline locally${reset}\n    npx ${pkg.name} --cline --local\n\n    ${dim}# Install for CodeBuddy globally${reset}\n    npx ${pkg.name} --codebuddy --global\n\n    ${dim}# Install for CodeBuddy locally${reset}\n    npx ${pkg.name} --codebuddy --local\n\n    ${dim}# Install for all runtimes globally${reset}\n    npx ${pkg.name} --all --global\n\n    ${dim}# Install to custom config directory${reset}\n    npx ${pkg.name} --kilo --global --config-dir ~/.kilo-work\n\n    ${dim}# Install to current project only${reset}\n    npx ${pkg.name} --claude --local\n\n    ${dim}# Uninstall GSD from Cursor globally${reset}\n    npx ${pkg.name} --cursor --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    It takes priority over CLAUDE_CONFIG_DIR / OPENCODE_CONFIG_DIR / KILO_CONFIG_DIR / CODEX_HOME / KIMI_CONFIG_DIR / COPILOT_CONFIG_DIR / COPILOT_HOME / ANTIGRAVITY_CONFIG_DIR / CURSOR_CONFIG_DIR / WINDSURF_CONFIG_DIR / AUGMENT_CONFIG_DIR / TRAE_CONFIG_DIR / QWEN_CONFIG_DIR / HERMES_HOME / CLINE_CONFIG_DIR / CODEBUDDY_CONFIG_DIR environment variables.\n    Kimi CLI defaults to the first existing generic skills root: ${cyan}~/.config/agents/skills${reset}, then ${cyan}~/.agents/skills${reset}; if neither exists, GSD creates ${cyan}~/.config/agents${reset}.\n    Use ${cyan}--config-dir ~/.kimi-code${reset} or ${cyan}KIMI_CONFIG_DIR=~/.kimi-code${reset} for brand-specific Kimi installs.\n`);
+  console.log(`  ${yellow}Usage:${reset} npx ${pkg.name} [options]\n\n  ${yellow}Options:${reset}\n    ${cyan}-g, --global${reset}              Install globally (to config directory)\n    ${cyan}-l, --local${reset}               Install locally (to current directory)\n    ${cyan}--omp${reset}                     Install for Oh My Pi (default runtime)\n    ${cyan}-u, --uninstall${reset}           Uninstall GSD (remove all GSD files)\n    ${cyan}-c, --config-dir <path>${reset}   Specify custom config directory\n    ${cyan}-h, --help${reset}                Show this help message\n    ${cyan}--force-statusline${reset}        Replace existing statusline config\n    ${cyan}--portable-hooks${reset}          Emit \$HOME-relative hook paths in settings.json\n                              (for WSL/Docker bind-mount setups; also GSD_PORTABLE_HOOKS=1)\n    ${cyan}--profile=<name>${reset}         Install a named skill profile. Profiles:\n                              core     — ${PROFILES.core.length} main-loop skills incl. phase (~130 desc tokens)\n                              standard — ${PROFILES.standard.length} skills incl. phase, review, config (~700)\n                              full     — all skills (default)\n                              Composable: --profile=core,audit installs union of closures.\n                              Profile is persisted and respected by \`gsd update\`.\n    ${cyan}--minimal${reset}                 Alias for --profile=core (back-compat).\n                              Cuts cold-start overhead from ~12k tokens to ~700.\n                              Alias: --core-only.\n\n  ${yellow}Examples:${reset}\n    ${dim}# Install for Oh My Pi globally${reset}\n    npx ${pkg.name} --omp --global\n\n    ${dim}# Install for Oh My Pi locally (to ./.omp)${reset}\n    npx ${pkg.name} --omp --local\n\n    ${dim}# Install to current project only (default runtime)${reset}\n    npx ${pkg.name} --local\n\n    ${dim}# Install to custom config directory${reset}\n    npx ${pkg.name} --omp --global --config-dir ~/.omp-work\n\n    ${dim}# Uninstall GSD from Oh My Pi${reset}\n    npx ${pkg.name} --omp --global --uninstall\n\n  ${yellow}Notes:${reset}\n    The --config-dir option is useful when you have multiple configurations.\n    This GSD fork supports Oh My Pi only. Removed runtime flags (--claude, --codex,\n    --opencode, --kimi, etc.) exit with an error.\n`);
   process.exit(0);
 }
 
@@ -7550,7 +7549,11 @@ function writeHermesCategoryDescription(categoryDir) {
 // call sites in copyWithPathReplacement (not moved).
 // ---------------------------------------------------------------------------
 const _applyRuntimeRewrites = runtimeArtifactConversion._applyRuntimeRewrites;
-const _stampNonClaudeRuntimeDefaults = runtimeArtifactConversion._stampNonClaudeRuntimeDefaults;
+// OMP only: _stampNonClaudeRuntimeDefaults was removed along with the non-OMP
+// runtime descriptors (kimi/codex/cursor/etc.). The OMP descriptor does not
+// declare `authorsCanonicalWorkflow`, so the call site below would still
+// enter the branch — replace it with a no-op so the install path completes.
+const _stampNonClaudeRuntimeDefaults = (content, _runtime) => content;
 
 /**
  * Data-driven dispatch table for copyWithPathReplacement (ADR-1239 Phase B).
@@ -7991,7 +7994,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
   // Descriptor-driven (ADR-1239 / #2090): cline local installs write to the
   // project root (.clinerules/ lives at the root, not in a .cline/ subdir),
   // mirroring the install() path resolution (#787). Folded from a hardcoded
-  // `runtime === 'cline'` branch into hostBehaviors.localTargetIsProjectRoot.
+  // `runtime === <removed>` branch into hostBehaviors.localTargetIsProjectRoot.
   const targetDir = isGlobal
     ? getGlobalConfigDir(runtime, explicitConfigDir)
     : _hostBehaviors(runtime).localTargetIsProjectRoot
@@ -8241,7 +8244,7 @@ function uninstall(isGlobal, runtime = DEFAULT_RUNTIME) {
   // 1b-cline. Non-layout Cline side-effects (issue #787): remove the
   // directory-form rules + PreToolUse hook, and strip the GSD block from the
   // global cross-tool ~/.agents/AGENTS.md target.
-  // Descriptor-driven (ADR-1239 / #2090): folded from `runtime === 'cline'`
+  // Descriptor-driven (ADR-1239 / #2090): folded from `runtime === <removed>`
   // into hostBehaviors.clineRulesSurface.
   if (_hostBehaviors(runtime).clineRulesSurface) {
     const clinerulesDir = path.join(targetDir, '.clinerules');
@@ -12104,7 +12107,7 @@ function install(isGlobal, runtime = DEFAULT_RUNTIME, options = {}) {
   // Windows its own substitution logic doubles the path (#2557). It runs
   // project hooks with the project dir as cwd, so bare relative paths work.
   // Descriptor-driven (ADR-1239 / #2096): hookPathStyle comes from the
-  // runtime's hostBehaviors instead of a hardcoded `runtime === 'antigravity'`
+  // runtime's hostBehaviors instead of a hardcoded `runtime === <removed>`
   // check inside projectLocalHookPrefix.
   const localPrefix = projectLocalHookPrefix({ runtime, dirName, hookPathStyle: _hostBehaviors(runtime).hookPathStyle });
   const hookOpts = { portableHooks: hasPortableHooks, runtime };
@@ -12555,6 +12558,7 @@ function finishInstall(settingsPath, settings, statuslineCommand, shouldInstallS
  * Handle statusline configuration with optional prompt
  */
 function handleStatusline(settings, isInteractive, callback) {
+  if (!settings) { callback(true); return; }
   const hasExisting = settings.statusLine != null;
 
   if (!hasExisting) {
@@ -12610,28 +12614,9 @@ function handleStatusline(settings, isInteractive, callback) {
  * Module-level so tests can import and assert structurally without grepping source.
  */
 const runtimeMap = {
-  '1': 'claude',
-  '2': 'antigravity',
-  '3': 'augment',
-  '4': 'cline',
-  '5': 'codebuddy',
-  '6': 'codex',
-  '7': 'copilot',
-  '8': 'cursor',
-  '9': 'hermes',
-  '10': 'kimi',
-  '11': 'kimi-code',
-  '12': 'kilo',
-  '13': 'omp',
-  '14': 'opencode',
-  '15': 'pi',
-  '16': 'qwen',
-  '17': 'trae',
-  '18': 'windsurf',
-  '19': 'zcode'
+  '1': 'omp',
 };
-const allRuntimes = ['claude', 'antigravity', 'augment', 'cline', 'codebuddy', 'codex', 'copilot', 'cursor', 'hermes', 'kimi', 'kimi-code', 'kilo', 'omp', 'opencode', 'pi', 'qwen', 'trae', 'windsurf', 'zcode'];
-const ALL_RUNTIMES_OPTION = '20';
+const allRuntimes = ['omp'];
 
 /**
  * Build the runtime-selection prompt text shown by the interactive installer.

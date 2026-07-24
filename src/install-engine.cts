@@ -94,9 +94,7 @@ function _hostBehaviors(runtime: string): any {
 // ---------------------------------------------------------------------------
 
 /**
- * Apply per-runtime path-prefix rewrites for OpenCode-family skill bodies.
- * Replaces ~/.claude/, $HOME/.claude/, ./.claude/ and OpenCode-variant paths
- * with the computed pathPrefix for the install.
+ * Apply per-runtime path-prefix rewrites for skill bodies.
  */
 function applyOpencodeFamilyPathPrefix(content: string, runtime: string, pathPrefix: string): string {
   content = content.replace(/~\/\.claude\//g, pathPrefix);
@@ -108,34 +106,12 @@ function applyOpencodeFamilyPathPrefix(content: string, runtime: string, pathPre
 }
 
 /**
- * Convert a Claude command (.md) to an OpenCode skill (SKILL.md).
- * The canonical OpenCode-family writer lives in runtime-artifact-conversion.cjs
- * (single source of truth — avoids a duplicate writer drifting per
- * DEFECT.GENERATIVE-FIX); this thin wrapper delegates to it.
- */
-function convertClaudeCommandToOpencodeSkill(content: string, skillName: string): string {
-  return (runtimeArtifactConversion as any).convertClaudeCommandToOpencodeSkill(content, skillName);
-}
-
-/**
- * Convert a Claude command (.md) to a Kilo skill (SKILL.md).
- * Thin wrapper over the shared OpenCode-family writer (Kilo shares the schema).
- */
-function convertClaudeCommandToKiloSkill(content: string, skillName: string): string {
-  return (runtimeArtifactConversion as any).convertClaudeCommandToKiloSkill(content, skillName);
-}
-
-/**
- * Converter-name registry for the OpenCode-family combined skills installer
- * (ADR-1239 / #2093). Maps the `converter` string declared on each runtime's
- * artifactLayout skills-kind descriptor (capabilities/<runtime>/capability.json)
- * to the actual conversion function, so `installOpencodeFamilySkills` dispatches
- * off the descriptor instead of a `frontmatterDialect === 'kilo'` runtime check.
+ * Converter-name registry for the skills installer. Maps the `converter` string
+ * declared on each runtime's artifactLayout skills-kind descriptor to the actual
+ * conversion function.
  */
 const SKILLS_CONVERTER_REGISTRY: Record<string, (content: string, skillName: string) => string> = {
-  convertClaudeCommandToOpencodeSkill,
-  convertClaudeCommandToKiloSkill,
-  convertClaudeCommandToKimiCodeSkill: runtimeArtifactConversion.convertClaudeCommandToKimiCodeSkill,
+  convertClaudeCommandToOmpSkill: runtimeArtifactConversion.convertClaudeCommandToOmpSkill,
 };
 
 // ---------------------------------------------------------------------------
@@ -557,36 +533,6 @@ function _restoreDir(dir: string, snapshot: Map<string, Buffer>): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// _removeHermesBareStemDirs
-// ---------------------------------------------------------------------------
-
-/**
- * After the layout-driven install loop writes new gsd-<stem>/ dirs to
- * skills/gsd/, remove any pre-existing bare-stem dirs (skills/gsd/<stem>/)
- * that correspond to the newly installed gsd-<stem> entries.
- *
- * @param nestedGsdDir  absolute path to skills/gsd/ category dir
- */
-function _removeHermesBareStemDirs(nestedGsdDir: string): void {
-  if (!fs.existsSync(nestedGsdDir)) return;
-  const entries = fs.readdirSync(nestedGsdDir, { withFileTypes: true });
-
-  // Collect the set of stems that were installed as gsd-<stem>/ this run.
-  const installedStems = new Set<string>();
-  for (const entry of entries) {
-    if (entry.isDirectory() && entry.name.startsWith('gsd-')) {
-      installedStems.add(entry.name.slice('gsd-'.length)); // e.g. 'quick', 'dev-preferences'
-    }
-  }
-
-  // Remove any bare <stem>/ dir for which gsd-<stem>/ was just installed.
-  for (const entry of entries) {
-    if (entry.isDirectory() && !entry.name.startsWith('gsd-') && installedStems.has(entry.name)) {
-      fs.rmSync(path.join(nestedGsdDir, entry.name), { recursive: true });
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Legacy migration helpers
@@ -835,34 +781,6 @@ function installRuntimeArtifacts(
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
     }
   }
-
-  // Hermes: after the install loop has written all gsd-<stem>/ dirs to
-  // skills/gsd/, remove any stale bare-stem dirs (skills/gsd/<stem>/) that
-  // correspond to the newly installed gsd-<stem> entries. This is the robust
-  // replacement for the readGsdCommandNames()-based pre-install cleanup that
-  // missed skills like 'dev-preferences' (#947 adversarial review).
-  //
-  // We run this AFTER the install loop so the installed set is authoritative:
-  // every gsd-<stem>/ present now was written this run (or was there before
-  // with the same prefix). User-owned bare dirs with no gsd-<stem> counterpart
-  // are untouched.
-  if (runtime === 'hermes') {
-    const nestedGsdDirForCleanup = path.join(configDir, 'skills', 'gsd');
-    _removeHermesBareStemDirs(nestedGsdDirForCleanup);
-  }
-
-  // Generic-branch nativePlugin staging (ADR-1239 / #2102 Stage 1): runtimes
-  // outside the OpenCode/Kilo combined-family install (e.g. pi, whose
-  // artifactLayout is empty and which never sets combinedFamilyInstall) still
-  // need their declared hostBehaviors.nativePlugin file copied into configDir.
-  // findInstallSourceRoot resolves the repo/package root independent of
-  // configDir contents (marker check, then a walk-up from __dirname), so this
-  // is safe even when configDir has no .gsd-source marker (artifactLayout: []).
-  if (behaviors.nativePlugin) {
-    const commandsGsdDir = runtimeArtifactLayout.findInstallSourceRoot(configDir);
-    const src = path.dirname(path.dirname(commandsGsdDir));
-    _installNativePluginIfDeclared(runtime, configDir, behaviors, src);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1088,55 +1006,6 @@ function installOpencodeFamilyCommands(
 }
 
 // ---------------------------------------------------------------------------
-// _installNativePluginIfDeclared
-// ---------------------------------------------------------------------------
-
-/**
- * Copy a runtime's declared native-extension/plugin file (hostBehaviors.nativePlugin)
- * into its resolved config dir, when the runtime descriptor declares one.
- *
- * Extracted (ADR-1239 / #2102 Stage 1) from the body previously inlined in
- * installOpencodeFamilyArtifacts so a runtime that is NOT part of the
- * OpenCode/Kilo combined-family install (e.g. pi, whose artifactLayout is
- * empty and which never sets combinedFamilyInstall) can still get its
- * nativePlugin file staged via the generic installRuntimeArtifacts branch.
- * Behavior for opencode/kilo is unchanged — same source resolution, same
- * mkdir + copyFileSync call, same silent no-op when the source is missing.
- *
- * @param runtime  - canonical runtime id (only used for the assertDestWithinConfigHome guard)
- * @param configDir - resolved runtime config directory
- * @param behaviors - the runtime's hostBehaviors descriptor
- * @param src       - repo/package root (two levels up from the commands/gsd source dir)
- */
-function _installNativePluginIfDeclared(
-  runtime: string,
-  configDir: string,
-  behaviors: any,
-  src: string,
-): void {
-  const np = behaviors.nativePlugin;
-  if (np && np.source) {
-    const pluginSrc = path.join(src, np.source);
-    if (fs.existsSync(pluginSrc)) {
-      // Confine the FULL dest path (dir + file), not just the dir. Previously
-      // only `np.dir` was validated and `np.file` was joined on unchecked, so a
-      // descriptor whose `file` carried `..`, an absolute path, or a NUL byte
-      // would have written outside configHome. Not reachable today — descriptors
-      // are first-party and compiled into the capability registry at build time —
-      // but `np.file` is exactly the field #2470 changes, and the guard costs
-      // nothing. For a well-formed descriptor this resolves identically to the
-      // previous mkdir(dir) + join(dir, file).
-      const destPath = runtimeArtifactInstallPlan.assertDestWithinConfigHome(
-        configDir,
-        path.join(np.dir, np.file),
-      );
-      fs.mkdirSync(path.dirname(destPath), { recursive: true });
-      fs.copyFileSync(pluginSrc, destPath);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
 // _migrateLegacyOpencodeCommandDir
 // ---------------------------------------------------------------------------
 
@@ -1211,23 +1080,16 @@ function _migrateLegacyOpencodeCommandDir(runtime: string, configDir: string, be
 // ---------------------------------------------------------------------------
 
 /**
- * Combined-family install orchestrator for OpenCode/Kilo (ADR-1239 / #2087,
- * #2093). Stages the flattened commands surface + skills surface + (any
- * runtime whose hostBehaviors declares `nativePlugin` — OpenCode and, since
- * #2093, Kilo) native plugin adapter, mirroring the bespoke `else if (isOpencode ||
- * isKilo)` block previously inlined in bin/install.js.
+ * Combined-family install orchestrator (ADR-1239 / #2087, #2093). Stages the
+ * flattened commands surface + skills surface.
  *
- * @param runtime - 'opencode' or 'kilo'
+ * @param runtime - canonical runtime id
  * @param configDir - resolved runtime config directory
  * @param scope - install scope ('global' | 'local')
  * @param resolvedProfile - from resolveProfile() / resolveEffectiveProfile()
  * @param resolveAttribution - injection: (runtime) => attribution string | undefined
  * @param behaviors - the runtime's hostBehaviors descriptor (already resolved by the caller)
- * @param capabilityRegistry - #2362: optional composed capability registry
- *   (capabilityClusters view), threaded straight through to
- *   installOpencodeFamilySkills so an installed third-party capability skill
- *   materializes for this combined-family (OpenCode/Kilo) install path too.
- *   Absent -> no third-party skills staged (fail closed).
+ * @param capabilityRegistry - optional composed capability registry
  */
 function installOpencodeFamilyArtifacts(
   runtime: string,
@@ -1250,7 +1112,6 @@ function installOpencodeFamilyArtifacts(
 
   const pathPrefix = (runtimeArtifactConversion as any)._computePathPrefix({
     isGlobal,
-    isOpencode: behaviors.skipHomePrefixSubstitution === true,
     isWindowsHost: process.platform === 'win32',
     resolvedTarget: posixNormalize(path.resolve(configDir)),
     homeDir: posixNormalize(os.homedir()),
@@ -1269,8 +1130,6 @@ function installOpencodeFamilyArtifacts(
   );
   installOpencodeFamilyCommands(runtime, commandDir, rawCommandsDir, pathPrefix, resolveAttribution);
   installOpencodeFamilySkills(runtime, configDir, rawCommandsDir, pathPrefix, resolveAttribution, resolvedProfile, capabilityRegistry);
-
-  _installNativePluginIfDeclared(runtime, configDir, behaviors, src);
 }
 
 // ---------------------------------------------------------------------------
@@ -1321,17 +1180,12 @@ function uninstallRuntimeArtifacts(runtime: string, configDir: string, scope: st
     }
   }
 
-  // #2973 / Codex review (bd1f06c9): migrate dev-preferences.md to the
-  // runtime-aware SKILL.md location after all layout-driven removal is
-  // complete. Do NOT restore to commands/gsd/ — the user is uninstalling.
+  // #2973: migrate dev-preferences.md to the runtime-aware SKILL.md
+  // location after all layout-driven removal is complete.
   if (savedLegacyArtifacts) {
     migrateLegacyDevPreferencesToSkill(configDir, savedLegacyArtifacts, runtime, scope);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Exports
-// ---------------------------------------------------------------------------
 
 export = {
   installRuntimeArtifacts,
@@ -1339,7 +1193,6 @@ export = {
   installOpencodeFamilySkills,
   installOpencodeFamilyCommands,
   installOpencodeFamilyArtifacts,
-  _installNativePluginIfDeclared,
   _hostBehaviors,
   _copyStaged,
   hasExistingSymlinkBetween,
@@ -1348,13 +1201,10 @@ export = {
   restoreUserArtifacts,
   migrateLegacyDevPreferencesToSkill,
   applyOpencodeFamilyPathPrefix,
-  convertClaudeCommandToOpencodeSkill,
-  convertClaudeCommandToKiloSkill,
   USER_OWNED_ARTIFACTS,
   _runLegacyInstallMigrations,
   _runLegacyUninstallCleanup,
   _removeGsdEntries,
   _snapshotDir,
   _restoreDir,
-  _removeHermesBareStemDirs,
 };

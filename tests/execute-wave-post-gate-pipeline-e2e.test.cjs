@@ -67,6 +67,9 @@ function runTool(args, { cwd, env = {} } = {}) {
     CODEX_THREAD_ID: '',
     CLAUDE_SESSION_ID: '',
     CLAUDE_CODE_SSE_PORT: '',
+    OMP_PROFILE: '',
+    PI_PROFILE: '',
+    PI_CODING_AGENT_DIR: '',
     ...env,
   };
   const r = spawnSync(process.execPath, [GSD_TOOLS, ...args], {
@@ -643,15 +646,5 @@ describe('F. Real registry execute:wave:post shape — guard against accidental 
       `execute:wave:post contributions must be external-job + mempalace; got ${capIds.join(',')}`);
   });
 
-  test('[happy] real registry: execute:wave:pre has 1 contribution (claude-orchestration dispatch-backend selector, #2285)', () => {
-    const point = realRegistry.byLoopPoint['execute:wave:pre'];
-    assert.strictEqual(point.steps.length, 0,
-      `execute:wave:pre steps must be empty; got ${point.steps.length}`);
-    assert.strictEqual(point.contributions.length, 1,
-      `execute:wave:pre must have 1 contribution (claude-orchestration); got ${point.contributions.length}`);
-    const capIds = point.contributions.map(c => c.capId).sort();
-    assert.deepStrictEqual(capIds, ['claude-orchestration'],
-      `execute:wave:pre contributions must be claude-orchestration; got ${capIds.join(',')}`);
-  });
 
 });

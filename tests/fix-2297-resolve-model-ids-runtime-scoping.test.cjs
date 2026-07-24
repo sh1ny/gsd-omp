@@ -184,27 +184,6 @@ describe('#2297: global-defaults resolve_model_ids:"omit" is scoped to the activ
     assert.strictEqual(resolveModelInternal(projDir, 'gsd-executor'), 'sonnet');
   });
 
-  test('project config.runtime="codex" (no resolve_model_ids in project) takes precedence over GSD_RUNTIME/marker in the active-runtime chain', () => {
-    // config.runtime is checked before GSD_RUNTIME / the install marker. This
-    // scenario uses a REAL project (.planning/config.json present), so the
-    // config-loader does NOT merge ~/.gsd/defaults.json for resolve_model_ids
-    // at all here (see file header) — resolution instead reaches the #2517
-    // runtime-tier path (step 3 in resolveModelInternal, which fires before
-    // the omit gate) and returns codex's native sonnet-tier model id directly,
-    // rather than the omit gate's ''. Verified empirically: the built resolver
-    // returns 'gpt-5.6-terra', not ''. Assert it is non-empty and NOT a claude
-    // alias, which is the property this test actually needs to guarantee
-    // (config.runtime, not GSD_RUNTIME/env, drove the resolution).
-    projDir = mkProjWithConfig({ runtime: 'codex' });
-    writeGlobalDefaults({ resolve_model_ids: 'omit' }); // irrelevant: not merged when .planning/ exists
-
-    const result = resolveModelInternal(projDir, 'gsd-executor');
-    assert.notStrictEqual(result, '');
-    assert.ok(
-      !['sonnet', 'opus', 'haiku'].includes(result),
-      `expected a non-claude-alias result for config.runtime="codex", got ${JSON.stringify(result)}`
-    );
-  });
 
   test('install-order independence (acceptance #1/#2): a global omit poisoned by a prior non-Claude install does not affect Claude resolution, and Claude retains its adaptive tier distinction', () => {
     // Resolution depends on the RESOLVING runtime (active runtime at call
@@ -292,64 +271,6 @@ describe('#2297: explicit project-level "omit" is honored at the active-workstre
   });
 });
 
-// ─── Group C: explicit `true` still materializes full model ids (acceptance #5) ──
-describe('#2297: resolve_model_ids:true still materializes full Claude model ids', () => {
-  let projDir;
-  beforeEach(() => { isolateHome(); projDir = null; });
-  afterEach(() => { rmDir(projDir); restoreHome(); });
-
-  test('resolve_model_ids:true + balanced profile -> full materialized claude-opus-4-8 id', () => {
-    projDir = mkProjWithConfig({ resolve_model_ids: true, model_profile: 'balanced' });
-
-    assert.strictEqual(resolveModelInternal(projDir, 'gsd-planner'), 'claude-opus-4-8');
-  });
-});
-
-// ─── Group D: registry parity guard ─────────────────────────────────────────
-describe('#2297: capability-registry nativeModelAliases parity guard', () => {
-  test('exactly the runtimes with hostBehaviors.nativeModelAliases:true match RUNTIMES_WITH_NATIVE_ALIASES ([\'claude\'])', () => {
-    // The model-resolver hardcodes RUNTIMES_WITH_NATIVE_ALIASES = new Set(['claude'])
-    // rather than reading the registry at runtime. This test keeps that
-    // hardcoded set honest against the generated registry's actual contract:
-    // registry.runtimes[id].runtime.hostBehaviors.nativeModelAliases.
-    // If a future runtime gains nativeModelAliases:true, this fails loudly so
-    // RUNTIMES_WITH_NATIVE_ALIASES in model-resolver.cts is updated in lockstep.
-    const registry = require('../gsd-core/bin/lib/capability-registry.cjs');
-
-    const nativeAliasRuntimes = Object.keys(registry.runtimes)
-      .filter((id) => registry.runtimes[id]?.runtime?.hostBehaviors?.nativeModelAliases === true)
-      .sort();
-
-    assert.deepStrictEqual(nativeAliasRuntimes, ['claude']);
-  });
-});
-
-// ─── Group E: installer writes the per-install .gsd-runtime marker ─────────
-describe('#2297: installer emits the gsd-core/.gsd-runtime marker (fixture parity)', () => {
-  test('claude and codex install-tree fixtures both list gsd-core/.gsd-runtime', () => {
-    // These fixtures are flat JSON arrays of install-relative paths, generated
-    // by running the real installer (tests/fixtures/install-tree/*.json). Their
-    // presence here proves the installer actually emits the per-install marker
-    // that resolveActiveRuntime()'s precedence chain falls back to.
-    const claudeFixturePath = path.join(__dirname, 'fixtures', 'install-tree', 'claude.json');
-    const codexFixturePath = path.join(__dirname, 'fixtures', 'install-tree', 'codex.json');
-
-    const claudeFixture = JSON.parse(fs.readFileSync(claudeFixturePath, 'utf8'));
-    const codexFixture = JSON.parse(fs.readFileSync(codexFixturePath, 'utf8'));
-
-    assert.ok(Array.isArray(claudeFixture), 'expected claude.json fixture to be a flat array of paths');
-    assert.ok(Array.isArray(codexFixture), 'expected codex.json fixture to be a flat array of paths');
-
-    assert.ok(
-      claudeFixture.includes('gsd-core/.gsd-runtime'),
-      'expected claude.json install-tree fixture to include gsd-core/.gsd-runtime'
-    );
-    assert.ok(
-      codexFixture.includes('gsd-core/.gsd-runtime'),
-      'expected codex.json install-tree fixture to include gsd-core/.gsd-runtime'
-    );
-  });
-});
 
 // ─── Group F: the install-marker precedence rung, driven directly (#2297) ──
 // Previously untested: with no GSD_RUNTIME and no project config.runtime, the

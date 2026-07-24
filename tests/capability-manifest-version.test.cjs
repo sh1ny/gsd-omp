@@ -282,7 +282,7 @@ describe('every native capability.json carries a valid version + engines.gsd', (
     .map((d) => d.name);
 
   test('there are native capabilities to check', () => {
-    assert.ok(ids.length >= 30, `expected the full native capability set, found ${ids.length}`);
+    assert.ok(ids.length >= 20, `expected the full native capability set, found ${ids.length}`);
   });
 
   for (const id of ids) {

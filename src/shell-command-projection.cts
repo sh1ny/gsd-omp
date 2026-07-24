@@ -82,26 +82,12 @@ export function formatHookCommandForRuntime(command: string, opts: { platform?: 
   return hookCommandNeedsPowerShellCallOperator(opts) ? `& ${command}` : command;
 }
 
-// #166/#580: Claude Code on Windows executes hook command strings inside Git
-// Bash. A `.sh` hook wrapped with an explicit bash.exe path makes bash try to
-// exec bash itself ("C:/.../bash.exe: cannot execute binary file"). Both install
-// paths — global (buildHookCommand) and local (buildLocalShellHookCommand) — must
-// drop the bash runner in this case and emit only the anchored script path.
-// Centralized here so the two paths cannot silently drift apart again: the local
-// path missed this guard and reintroduced the #166/#377 failure (#580).
-export function shellHookOmitsBashRunner({ platform, runtime = 'generic', isShellHook = false }: { platform?: string; runtime?: string; isShellHook?: boolean } = {}): boolean {
-  const p = platform ?? process.platform;
-  return p === 'win32' && runtime === 'claude' && isShellHook;
-}
-
 // Builds the command string for a local-install managed `.sh` hook. Mirrors the
 // global buildHookCommand path but uses the $CLAUDE_PROJECT_DIR-anchored prefix
-// instead of an absolute configDir. On Claude/Windows the bash runner is dropped
-// (see shellHookOmitsBashRunner) and the anchored script path is emitted alone —
-// matching the global path. Elsewhere the resolved bash runner is required; a
-// null runner yields null so callers skip registration instead of emitting a
-// broken hook (#3393).
-export function buildLocalShellHookCommand({ localPrefix, hookFile, bashRunner, runtime = 'generic', platform = process.platform }: {
+// instead of an absolute configDir. Elsewhere the resolved bash runner is
+// required; a null runner yields null so callers skip registration instead of
+// emitting a broken hook (#3393).
+export function buildLocalShellHookCommand({ localPrefix, hookFile, bashRunner, runtime = 'omp', platform = process.platform }: {
   localPrefix?: string | null;
   hookFile?: string | null;
   bashRunner?: string | null;
@@ -110,9 +96,6 @@ export function buildLocalShellHookCommand({ localPrefix, hookFile, bashRunner, 
 }): string | null {
   if (!localPrefix || !hookFile) return null;
   const scriptPath = `${localPrefix}/hooks/${hookFile}`;
-  if (shellHookOmitsBashRunner({ platform, runtime, isShellHook: true })) {
-    return formatHookCommandForRuntime(scriptPath, { platform, runtime });
-  }
   if (!bashRunner) return null;
   return projectShellCommandText({
     runnerToken: bashRunner,
@@ -133,7 +116,7 @@ export function formatManagedHookScriptToken(scriptPath: string, opts: { platfor
   return JSON.stringify(posixNormalize(scriptPath));
 }
 
-export function projectLocalHookPrefix({ runtime: _runtime = 'claude', dirName, hookPathStyle }: { runtime?: string; dirName?: string | null; hookPathStyle?: string | null }): string | undefined | null {
+export function projectLocalHookPrefix({ runtime: _runtime = 'omp', dirName, hookPathStyle }: { runtime?: string; dirName?: string | null; hookPathStyle?: string | null }): string | undefined | null {
   if (!dirName) return dirName;
   // Descriptor-driven (ADR-1239 / #2096): folded from a hardcoded
   // `runtime === 'antigravity'` literal into the runtime's declared

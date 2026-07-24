@@ -16,21 +16,7 @@ const BASELINE_MIGRATION_ID = '2026-05-11-first-time-baseline-scan';
 // - docs/installer-migrations.md#runtime-configuration-contract-registry
 // - docs/ARCHITECTURE.md#runtime-install-contract-matrix
 const RUNTIME_SURFACES: Record<string, string[]> = {
-  claude: ['gsd-core', 'commands/gsd', 'skills', 'agents', 'hooks', 'settings.json'],
-  codex: ['gsd-core', 'skills', 'agents', 'hooks', 'config.toml', 'hooks.json'],
-  gemini: ['gsd-core', 'commands/gsd', 'hooks'],
-  opencode: ['gsd-core', 'command', 'skills', 'agents'],
-  kilo: ['gsd-core', 'command', 'skills', 'agents'],
-  copilot: ['gsd-core', 'skills', 'agents'],
-  antigravity: ['gsd-core', 'skills', 'agents'],
-  cursor: ['gsd-core', 'skills', 'agents', 'hooks', 'hooks.json'],
-  windsurf: ['gsd-core', 'skills', 'agents', 'rules'],
-  augment: ['gsd-core', 'skills', 'agents'],
-  trae: ['gsd-core', 'skills', 'agents', 'rules'],
-  qwen: ['gsd-core', 'skills', 'agents'],
-  hermes: ['gsd-core', 'skills/gsd', 'agents'],
-  cline: ['gsd-core', 'skills', 'agents'],
-  codebuddy: ['gsd-core', 'skills', 'agents'],
+  omp: ['gsd-core', 'commands', 'skills', 'agents', 'rules', 'extensions'],
 };
 
 const COMMON_SURFACES = ['gsd-core', 'skills', 'agents', 'hooks'];
@@ -119,7 +105,7 @@ function isKnownGeneratedAgentPath(relPath: string, runtime: string | undefined)
   if (parts.length !== 2 || parts[0] !== 'agents') return false;
   const fileName = parts[1];
   const extension = path.posix.extname(fileName);
-  if (extension !== '.md' && !(runtime === 'codex' && extension === '.toml')) return false;
+  if (extension !== '.md') return false;
 
   const agentName = fileName.slice(0, -extension.length);
   return listKnownGeneratedAgentNames().has(agentName);

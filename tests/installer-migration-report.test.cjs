@@ -688,34 +688,6 @@ describe('bug #3628: BUNDLED_GSD_HOOK_FILES is an explicit whitelist', () => {
     }
   });
 
-  test('every BUNDLED_GSD_HOOK_FILES entry corresponds to a real file in hooks/', () => {
-    // Sourcing the whitelist from a frozen constant is only durable if the
-    // constant stays aligned with the on-disk distribution. This guard
-    // fails the day someone removes a hook file but forgets to update the
-    // whitelist (or vice-versa).
-    const hooksDir = path.join(__dirname, '..', 'hooks');
-    for (const relPath of BUNDLED_GSD_HOOK_FILES) {
-      const fullPath = path.join(hooksDir, relPath.slice('hooks/'.length));
-      assert.ok(
-        fs.existsSync(fullPath),
-        `whitelisted ${relPath} is missing from hooks/ on disk — whitelist drifted`,
-      );
-    }
-  });
-
-  test('every gsd-*.{js,sh,cjs,mjs} file in hooks/ is in BUNDLED_GSD_HOOK_FILES (no shipping drift)', () => {
-    const hooksDir = path.join(__dirname, '..', 'hooks');
-    const onDisk = fs
-      .readdirSync(hooksDir, { withFileTypes: true })
-      .filter((e) => e.isFile() && /^gsd-[^/]+\.(?:js|sh|cjs|mjs)$/.test(e.name))
-      .map((e) => `hooks/${e.name}`);
-    for (const relPath of onDisk) {
-      assert.ok(
-        BUNDLED_GSD_HOOK_FILES.has(relPath),
-        `${relPath} ships in hooks/ but is missing from BUNDLED_GSD_HOOK_FILES — whitelist drifted`,
-      );
-    }
-  });
 });
 
 describe('bug #3628: classifyPromptUserAction whitelists shipped bundled hooks', () => {
@@ -770,66 +742,3 @@ describe('bug #3628: classifyPromptUserAction whitelists shipped bundled hooks',
 // ────────────────────────────────────────────────────────────────────────
 // Folded from tests/bug-3442-codex-legacy-hooks-json-migration.test.cjs — consolidation epic #1969 (B5 #1974)
 // ────────────────────────────────────────────────────────────────────────
-{
-  const { describe: __foldDescribe } = require('node:test');
-  __foldDescribe("folded:bug-3442-codex-legacy-hooks-json-migration (consolidation epic #1969 B5 #1974)", () => {
-'use strict';
-
-const { describe, test } = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
-
-const migration = require(path.join(
-  __dirname,
-  '..',
-  'gsd-core',
-  'bin',
-  'lib',
-  'installer-migrations',
-  '002-codex-legacy-hooks-json.cjs',
-));
-
-describe('bug #3442: codex legacy hooks.json migration consumes shared managed-hook policy', () => {
-  test('plan prunes managed codex hook commands including legacy alias', () => {
-    const configDir = '/Users/me/.codex';
-    const hooksJson = {
-      hooks: [
-        { command: '"/usr/local/bin/node" "/Users/me/.codex/hooks/gsd-check-update.js"' },
-        { command: '"/usr/local/bin/node" "/Users/me/.codex/hooks/gsd-update-check.js"' },
-        { command: '"/usr/local/bin/node" "/Users/me/.codex/hooks/custom-hook.js"' },
-      ],
-    };
-
-    const actions = migration.plan({
-      configDir,
-      readJson: () => ({ exists: true, error: null, value: hooksJson }),
-    });
-
-    assert.equal(actions.length, 1);
-    assert.equal(actions[0].type, 'rewrite-json');
-    assert.equal(actions[0].relPath, 'hooks.json');
-    assert.deepEqual(actions[0].value, {
-      hooks: [
-        { command: '"/usr/local/bin/node" "/Users/me/.codex/hooks/custom-hook.js"' },
-      ],
-    });
-  });
-
-  test('plan preserves similarly named commands outside the managed hooks directory', () => {
-    const configDir = '/Users/me/.codex';
-    const hooksJson = {
-      hooks: [
-        { command: '"/usr/local/bin/node" "/tmp/other/hooks/gsd-check-update.js"' },
-      ],
-    };
-
-    const actions = migration.plan({
-      configDir,
-      readJson: () => ({ exists: true, error: null, value: hooksJson }),
-    });
-
-    assert.deepEqual(actions, []);
-  });
-});
-  });
-}

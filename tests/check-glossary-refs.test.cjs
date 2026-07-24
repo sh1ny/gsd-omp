@@ -22,10 +22,7 @@ const SCRIPT_REL = path.join('scripts', 'check-glossary-refs.cjs');
 
 // The real bin/install.js allRuntimes array, mirrored here so fixtures can
 // build both a matching and a deliberately-drifted CONTEXT.md against it.
-const REAL_RUNTIMES = [
-  'claude', 'antigravity', 'augment', 'cline', 'codebuddy', 'codex', 'copilot',
-  'cursor', 'hermes', 'kimi', 'kilo', 'opencode', 'pi', 'qwen', 'trae', 'windsurf', 'zcode',
-];
+const REAL_RUNTIMES = ['omp'];
 
 function allRuntimesSentence(count, members) {
   return `Runtime enum: \`allRuntimes\` (${count} values: ${members.join(', ')})`;
@@ -80,7 +77,7 @@ test('a clean CONTEXT.md whose refs resolve and whose allRuntimes matches passes
     '',
     'See `src/real-module.cts` for details.',
     '',
-    `${allRuntimesSentence(17, REAL_RUNTIMES)}.`,
+    `${allRuntimesSentence(1, REAL_RUNTIMES)}.`,
     '',
   ].join('\n');
   const root = makeRepo(t, { contextBody: context });
@@ -96,7 +93,7 @@ test('a reference to a nonexistent tracked file fails --check and names the toke
     '',
     'See `src/does-not-exist.cts` for details.',
     '',
-    `${allRuntimesSentence(17, REAL_RUNTIMES)}.`,
+    `${allRuntimesSentence(1, REAL_RUNTIMES)}.`,
     '',
   ].join('\n');
   const root = makeRepo(t, { contextBody: context });
@@ -107,25 +104,25 @@ test('a reference to a nonexistent tracked file fails --check and names the toke
 });
 
 test('allRuntimes count and membership drift is caught', (t) => {
-  // Mirrors the real-world case: CONTEXT.md says 15 while bin/install.js has 17.
-  const claimed15 = REAL_RUNTIMES.filter((r) => r !== 'pi' && r !== 'zcode');
-  assert.equal(claimed15.length, 15);
+  // Mirrors the real-world case: CONTEXT.md says 0 while bin/install.js has 1.
+  const claimed15 = REAL_RUNTIMES.filter(() => false);
+  assert.equal(claimed15.length, 0);
   const context = [
     '# Context',
     '',
     'See `src/real-module.cts` for details.',
     '',
-    `${allRuntimesSentence(15, claimed15)}.`,
+    `${allRuntimesSentence(0, claimed15)}.`,
     '',
   ].join('\n');
-  const root = makeRepo(t, { contextBody: context }); // bin/install.js defaults to the real 17
+  const root = makeRepo(t, { contextBody: context }); // bin/install.js defaults to the real 1
 
   const res = run(root, ['--check']);
   assert.equal(res.status, 1);
-  assert.match(res.stderr, /claims 15 values/);
-  assert.match(res.stderr, /has 17/);
-  assert.match(res.stderr, /pi/);
-  assert.match(res.stderr, /zcode/);
+  assert.match(res.stderr, /claims 0 values/);
+  assert.match(res.stderr, /has 1/);
+  assert.match(res.stderr, /omp/);
+  assert.match(res.stderr, /omp/);
 });
 
 test('a reference to a nonexistent gsd-core/bin/lib/*.cjs path is skipped (generated, gitignored)', (t) => {
@@ -134,7 +131,7 @@ test('a reference to a nonexistent gsd-core/bin/lib/*.cjs path is skipped (gener
     '',
     'Generated router lives at `gsd-core/bin/lib/does-not-exist.cjs`.',
     '',
-    `${allRuntimesSentence(17, REAL_RUNTIMES)}.`,
+    `${allRuntimesSentence(1, REAL_RUNTIMES)}.`,
     '',
   ].join('\n');
   const root = makeRepo(t, { contextBody: context });
@@ -149,7 +146,7 @@ test('a ~/-rooted path and a bare filename are both skipped', (t) => {
     '',
     'See `~/.claude/x.md` and `core.cjs` for details.',
     '',
-    `${allRuntimesSentence(17, REAL_RUNTIMES)}.`,
+    `${allRuntimesSentence(1, REAL_RUNTIMES)}.`,
     '',
   ].join('\n');
   const root = makeRepo(t, { contextBody: context });
@@ -169,7 +166,7 @@ test('a `..`-traversal token cannot escape ROOT into a filesystem-existence prob
     '',
     'Escape attempt: `src/../../../../../../etc/passwd` and `src/../../etc/hosts`.',
     '',
-    `${allRuntimesSentence(17, REAL_RUNTIMES)}.`,
+    `${allRuntimesSentence(1, REAL_RUNTIMES)}.`,
     '',
   ].join('\n');
   const root = makeRepo(t, { contextBody: context });

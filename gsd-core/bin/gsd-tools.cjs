@@ -1584,10 +1584,6 @@ function dispatchOverlayCapabilityCommand({ command, args, cwd, raw, error, load
     }
   }
 
-  function routeTeamsStatus({ args, cwd, raw, error }) {
-    const teamsStatus = require('./lib/teams-status.cjs');
-          teamsStatus.cmdTeamsStatus(cwd, { active: args.includes('--active') });
-  }
 
   async function routeDetectCustomFiles({ args, cwd, raw, error }) {
     const configDirIdx = args.indexOf('--config-dir');
@@ -2142,7 +2138,6 @@ const HOST_COMMAND_ROUTERS = {
     'worktree': routeWorktree,
     'docs-init': routeDocsInit,
     'learnings': routeLearnings,
-    'teams-status': routeTeamsStatus,
     'detect-custom-files': routeDetectCustomFiles,
     'from-gsd2': routeFromGsd2,
     'prompt-budget': routePromptBudget,

@@ -53,7 +53,7 @@ export function formatGsdSlash(commandName: unknown, runtime: unknown): unknown 
   const token = wsMatch ? wsMatch[1] : bare;
   const tail = wsMatch && wsMatch[2] ? wsMatch[2] : '';
 
-  const runtimeText = (typeof runtime === 'string' && runtime ? runtime : 'claude').toLowerCase();
+  const runtimeText = (typeof runtime === 'string' && runtime ? runtime : 'omp').toLowerCase();
   const rt = canonicalizeRuntimeName(runtimeText) || runtimeText;
 
   // Descriptor-driven: look up commandStyle from the capability registry.
@@ -87,7 +87,12 @@ export function formatGsdSlash(commandName: unknown, runtime: unknown): unknown 
  */
 export function resolveRuntime(projectDir: string | null | undefined): string {
   const envRuntime = resolveRuntimeNameFromCandidates(process.env['GSD_RUNTIME']);
-  if (envRuntime) return envRuntime;
+  if (envRuntime) {
+    if (envRuntime !== 'omp') {
+      throw new Error(`this GSD fork supports OMP only (got: ${envRuntime})`);
+    }
+    return envRuntime;
+  }
   if (projectDir) {
     try {
       // Read config.json directly (not via loadConfig). loadConfig has a side
@@ -101,10 +106,19 @@ export function resolveRuntime(projectDir: string | null | undefined): string {
         const parsed: unknown = JSON.parse(raw);
         if (parsed && typeof parsed === 'object' && 'runtime' in parsed) {
           const configRuntime = resolveRuntimeNameFromCandidates((parsed as Record<string, unknown>)['runtime']);
-          if (configRuntime) return configRuntime;
+          if (configRuntime) {
+            if (configRuntime !== 'omp') {
+              throw new Error(`this GSD fork supports OMP only (got: ${configRuntime})`);
+            }
+            return configRuntime;
+          }
         }
       }
-    } catch {
+    } catch (e) {
+      // Re-throw fail-loud errors; fall through to marker/default only for I/O errors.
+      if (e instanceof Error && e.message.includes('this GSD fork supports OMP only')) {
+        throw e;
+      }
       // Fall through to marker/default — a missing/broken config must not crash
       // runtime output formatting.
     }
@@ -117,20 +131,29 @@ export function resolveRuntime(projectDir: string | null | undefined): string {
   // mirrors model-resolver.cts's resolveActiveRuntime.
   if (projectDir) {
     try {
-      // Check common local install dir names for the marker
-      for (const dirName of ['.omp', '.pi', '.claude', '.opencode', '.kilo', '.codex', '.copilot', '.cursor', '.windsurf', '.augment', '.trae', '.qwen', '.hermes', '.codebuddy', '.cline', '.zcode']) {
-        const markerPath = path.join(projectDir, dirName, 'gsd-core', '.gsd-runtime');
-        if (fs.existsSync(markerPath)) {
-          const raw = fs.readFileSync(markerPath, 'utf8').trim();
-          const markerRuntime = resolveRuntimeNameFromCandidates(raw);
-          if (markerRuntime) return markerRuntime;
+      // Check the local install dir for the .gsd-runtime marker.
+      const markerPath = path.join(projectDir, '.omp', 'gsd-core', '.gsd-runtime');
+      if (fs.existsSync(markerPath)) {
+        const raw = fs.readFileSync(markerPath, 'utf8').trim();
+        const markerRuntime = resolveRuntimeNameFromCandidates(raw);
+        if (markerRuntime) {
+          if (markerRuntime !== 'omp') {
+            throw new Error(
+              `this GSD fork supports OMP only (got: ${markerRuntime})`
+            );
+          }
+          return markerRuntime;
         }
       }
-    } catch {
+    } catch (e) {
+      // Re-throw fail-loud errors; fall through to default only for I/O errors.
+      if (e instanceof Error && e.message.includes('this GSD fork supports OMP only')) {
+        throw e;
+      }
       // Fall through to default
     }
   }
-  return 'claude';
+  return 'omp';
 }
 /**
  * Convenience: format using the runtime resolved from a project directory.

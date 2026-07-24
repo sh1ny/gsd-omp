@@ -118,7 +118,6 @@ const RULES = [
     tests: [
       'tests/semver-compare.test.cjs',
       'tests/bug-10-semver-policy-consolidation.test.cjs',
-      'tests/golden-install-parity.test.cjs', // any src/installer change can alter emitted install artifacts → re-verify golden install parity (drift guard)
     ],
   },
   {
@@ -142,38 +141,6 @@ const RULES = [
       // SCOPED_LANE_EXCLUDE guard below, which also drops it when it is itself a
       // changed test file.
       'tests/runtime-artifact-layout.test.cjs',
-      'tests/golden-install-parity.test.cjs', // any src/installer change can alter emitted install artifacts → re-verify golden install parity (drift guard)
-    ],
-  },
-  {
-    name: 'shipped install content (golden-parity drift guard, #2267)',
-    // Every source file the installer EMITS into a runtime layout is captured by
-    // golden-install-parity + the install-tree snapshot. A source edit here that
-    // changes emitted output MUST re-verify the fixtures — otherwise stale golden
-    // fixtures merge silently (#2266: a hooks/gsd-statusline.js edit changed
-    // installed output but no rule selected golden-parity, so stale fixtures
-    // shipped to next undetected). Union semantics: this ADDS the parity guard on
-    // top of each path's existing content-specific tests. Targeted lane only (the
-    // golden test skips win32 by design), no fullMatrix.
-    // NOTE: intentionally NOT a blanket 'gsd-core/' prefix, for two reasons:
-    // (1) gsd-core/bin/** is tsc-compiled runtime output — EXCLUDED_PREFIXES-
-    //     excluded from both manifests, and already covered by the 'installer and
-    //     package layout' rule (path.startsWith('gsd-core/bin/')) — so matching it
-    //     here would be pure noise; and
-    // (2) enumerating only the installer-shipped content subtrees preserves the
-    //     bug-408 unit-fallback contract: a gsd-core/ path that is NOT shipped
-    //     verbatim (the bug-408 test uses gsd-core/src/some-util.js) must still
-    //     fall back to ['unit'] when no rule matches.
-    // Listed: the four gsd-core content subtrees the installer ships verbatim
-    // (contexts, references, templates, workflows) + bin/shared/*.json data files.
-    // Verify against Object.keys(golden fixture) grouped by gsd-core/<subdir>.
-    match: path =>
-      ['hooks/', 'commands/', 'agents/', 'skills/', 'gsd-core/workflows/', 'gsd-core/templates/', 'gsd-core/references/', 'gsd-core/contexts/', 'scripts/changeset/', 'scripts/lib/'].some(p => path.startsWith(p)) ||
-      (path.startsWith('gsd-core/bin/shared/') && path.endsWith('.json')) ||
-      ['scripts/fix-slash-commands.cjs', 'scripts/gen-capability-registry.cjs', 'scripts/gen-loop-host-contract.cjs'].includes(path),
-    tests: [
-      'tests/golden-install-parity.test.cjs',
-      'tests/golden-install-tree.test.cjs',
     ],
   },
   {
@@ -234,7 +201,6 @@ const RULES = [
     tests: [
       'tests/workflow-compat.test.cjs',
       'tests/workflow-size-budget.test.cjs',
-      'tests/workflow-guard-registration.test.cjs',
       'tests/commands.test.cjs',
       'tests/bug-3683-workflow-colon-namespace-leak.test.cjs',
     ],

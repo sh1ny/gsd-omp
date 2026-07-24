@@ -2106,7 +2106,7 @@ function buildAgentSkillsBlock(
     if (diagnostics) diagnostics.warnings.push(message.replace(/\n+$/, ''));
   };
 
-  const runtime = (config && (config['runtime'] as string)) || 'claude';
+  const runtime = (config && (config['runtime'] as string)) || 'omp';
   const globalSkillsBase = getGlobalSkillsBase(runtime);
 
   if (!config || !config['agent_skills'] || !agentType) return '';
@@ -2157,14 +2157,8 @@ function buildAgentSkillsBlock(
       const isNamespaced = skillName.includes(':');
       if (isNamespaced) {
         // Plugin-provided namespaced skill: no filesystem path exists locally.
-        if (runtime === 'claude') {
-          // Emit a natural-language Skill-tool directive (not a @-include).
-          validEntries.push({ kind: 'directive', name: skillName });
-        } else {
-          warn(
-            `[agent-skills] WARNING: Plugin-namespaced skill "global:${skillName}" requires a Skill-tool-capable runtime (claude) — skipping on runtime "${runtime}"\n`,
-          );
-        }
+        // Emit a natural-language Skill-tool directive (not a @-include).
+        validEntries.push({ kind: 'directive', name: skillName });
         continue;
       }
       // Non-namespaced bare name: attempt filesystem resolution as before.
@@ -2278,8 +2272,8 @@ function cmdAgentSkills(
   // documented "unconfigured → empty block" contract that agent-skills tests
   // pin.
   if (!block) {
-    const runtime = (config && (config['runtime'] as string)) || process.env['GSD_RUNTIME'] || 'claude';
-    if (runtime !== 'claude') {
+    const runtime = (config && (config['runtime'] as string)) || process.env['GSD_RUNTIME'] || 'omp';
+    {
       const agentCheck = checkAgentsInstalled(runtime, projectRoot) as unknown as { agents_dir?: string } | null;
       const agentsDir = agentCheck?.agents_dir;
       if (typeof agentsDir === 'string' && agentsDir.length > 0) {
@@ -2423,8 +2417,8 @@ function buildSkillManifest(cwd: string, skillsDir: string | null = null): Skill
       ]
     : [
         {
-          root: '.claude/skills',
-          path: path.join(cwd, '.claude', 'skills'),
+          root: '.omp/skills',
+          path: path.join(cwd, '.omp', 'skills'),
           scope: 'project',
           kind: 'skills',
         },
@@ -2435,61 +2429,10 @@ function buildSkillManifest(cwd: string, skillsDir: string | null = null): Skill
           kind: 'skills',
         },
         {
-          root: '.cursor/skills',
-          path: path.join(cwd, '.cursor', 'skills'),
-          scope: 'project',
-          kind: 'skills',
-        },
-        {
-          root: '.github/skills',
-          path: path.join(cwd, '.github', 'skills'),
-          scope: 'project',
-          kind: 'skills',
-        },
-        {
-          root: '.codex/skills',
-          path: path.join(cwd, '.codex', 'skills'),
-          scope: 'project',
-          kind: 'skills',
-        },
-        {
-          root: '~/.claude/skills',
-          path: getGlobalSkillsBase('claude') as string,
+          root: '~/.omp/skills',
+          path: getGlobalSkillsBase('omp') as string,
           scope: 'global',
           kind: 'skills',
-        },
-        {
-          // ADR-1239 upgrade 3 (#2088): Codex's canonical skill root is
-          // $HOME/.agents/skills (per codex core-skills loader.rs), resolved via
-          // the skills-kind `home` override in getGlobalSkillsBase.
-          root: '~/.agents/skills',
-          path: getGlobalSkillsBase('codex') as string,
-          scope: 'global',
-          kind: 'skills',
-        },
-        {
-          // Codex's deprecated fallback skill root ($CODEX_HOME/skills). Kept as a
-          // discovery-only legacy root so pre-move installs remain inventoried;
-          // GSD no longer installs here (#2088).
-          root: '~/.codex/skills',
-          path: path.join(getGlobalConfigDir('codex'), 'skills'),
-          scope: 'global',
-          kind: 'skills',
-          deprecated: true,
-        },
-        {
-          root: '.claude/gsd-core/skills',
-          path: path.join(os.homedir(), '.claude', 'gsd-core', 'skills'),
-          scope: 'import-only',
-          kind: 'skills',
-          deprecated: true,
-        },
-        {
-          root: '.claude/commands/gsd',
-          path: path.join(os.homedir(), '.claude', 'commands', 'gsd'),
-          scope: 'legacy-commands',
-          kind: 'commands',
-          deprecated: true,
         },
       ];
 

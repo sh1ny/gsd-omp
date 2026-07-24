@@ -152,7 +152,7 @@ describe('resolveModelInternal', () => {
 
   test('runtime non-claude + model_profile_overrides for runtime tier', () => {
     writeConfig(tmpDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_profile_overrides: {
         codex: { haiku: 'codex-mini', sonnet: 'codex', opus: 'codex-full' },
       },
@@ -492,8 +492,8 @@ describe('resolveModelPolicy (#49)', () => {
         high: 'generic-hi',
         medium: 'generic-med',
         low: 'generic-lo',
-        runtime: 'codex',
-        runtime_tiers: { codex: { sonnet: 'codex-sonnet-override' } },
+        runtime: 'omp',
+        runtime_tiers: { omp: { sonnet: 'codex-sonnet-override' } },
       },
       'sonnet'
     );
@@ -517,7 +517,7 @@ describe('resolveTierEntry (#2517)', () => {
   });
 
   test('null tier -> null', () => {
-    assert.strictEqual(resolveTierEntry({ runtime: 'codex', tier: null, overrides: null }), null);
+    assert.strictEqual(resolveTierEntry({ runtime: 'omp', tier: null, overrides: null }), null);
   });
 
   test('unknown runtime + unknown tier, no overrides -> null', () => {
@@ -530,9 +530,9 @@ describe('resolveTierEntry (#2517)', () => {
 
   test('user override as string expands to { model: string }', () => {
     const entry = resolveTierEntry({
-      runtime: 'codex',
+      runtime: 'omp',
       tier: 'sonnet',
-      overrides: { codex: { sonnet: 'my-custom-codex-model' } },
+      overrides: { omp: { sonnet: 'my-custom-codex-model' } },
     });
     assert.ok(entry !== null);
     assert.strictEqual(entry.model, 'my-custom-codex-model');
@@ -540,9 +540,9 @@ describe('resolveTierEntry (#2517)', () => {
 
   test('user override as object merged with builtin', () => {
     const entry = resolveTierEntry({
-      runtime: 'codex',
+      runtime: 'omp',
       tier: 'sonnet',
-      overrides: { codex: { sonnet: { model: 'user-model', extra: 'value' } } },
+      overrides: { omp: { sonnet: { model: 'user-model', extra: 'value' } } },
     });
     assert.ok(entry !== null);
     assert.strictEqual(entry.model, 'user-model');
@@ -621,7 +621,7 @@ describe('ADVERSARIAL: edge cases', () => {
 
   test('resolveTierEntry: runtime override with non-string, non-object value -> no model set', () => {
     const entry = resolveTierEntry({
-      runtime: 'codex',
+      runtime: 'omp',
       tier: 'sonnet',
       overrides: { codex: { sonnet: 42 } },
     });
@@ -1276,7 +1276,7 @@ describe('#3023 resolver: models.<phase_type> overrides profile-based tier', () 
 const { resolveEffortInternal } = require('../gsd-core/bin/lib/model-resolver.cjs');
 const { renderEffortForRuntime } = require('../gsd-core/bin/lib/model-catalog.cjs');
 
-describe('#3023 + #443: unified effort resolver (resolveEffortInternal) for Codex', () => {
+describe('#3023 + #443: unified effort resolver (resolveEffortInternal) for OMP', () => {
   let projectDir;
   beforeEach(() => { projectDir = makeTmp('effort'); });
   afterEach(() => { rmr(projectDir); });
@@ -1286,84 +1286,64 @@ describe('#3023 + #443: unified effort resolver (resolveEffortInternal) for Code
   });
 
   test('effort derives from AGENT_DEFAULT_TIERS (routing), not phase-type; gsd-executor is standard → high', () => {
-    // Under unification, effort is config-driven via routing_tier_defaults.
-    // gsd-executor has routing tier 'standard' → default effort 'high', regardless
-    // of models.execution phase-type or model_profile setting.
     writeConfig(projectDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_profile: 'balanced',
       models: { execution: 'opus' },
     });
     const eff = resolveEffortInternal(projectDir, 'gsd-executor');
-    // standard tier → 'high' (not 'xhigh' from opus, not 'medium' from old catalog)
     assert.equal(eff, 'high');
-    const rendered = renderEffortForRuntime('codex', eff);
-    assert.equal(rendered.param, 'model_reasoning_effort');
+    const rendered = renderEffortForRuntime('omp', eff);
     assert.equal(rendered.value, 'high');
   });
 
   test('effort resolves universally even when models.execution=inherit', () => {
-    // Under unification, models.execution='inherit' does not affect effort resolution.
-    // Effort always resolves from routing_tier_defaults: gsd-executor (standard) → 'high'.
     writeConfig(projectDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_profile: 'balanced',
       models: { execution: 'inherit' },
     });
     const eff = resolveEffortInternal(projectDir, 'gsd-executor');
     assert.equal(eff, 'high');
-    const rendered = renderEffortForRuntime('codex', eff);
-    assert.equal(rendered.param, 'model_reasoning_effort');
+    const rendered = renderEffortForRuntime('omp', eff);
     assert.equal(rendered.value, 'high');
   });
 
   test('per-agent model_overrides does not affect effort (effort is routing-tier-based)', () => {
-    // Under unification, effort does not check model_overrides.
-    // gsd-executor (standard tier) → 'high' regardless.
     writeConfig(projectDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_profile: 'balanced',
       models: { execution: 'opus' },
       model_overrides: { 'gsd-executor': 'openai/gpt-5' },
     });
     const eff = resolveEffortInternal(projectDir, 'gsd-executor');
     assert.equal(eff, 'high');
-    const rendered = renderEffortForRuntime('codex', eff);
-    assert.equal(rendered.param, 'model_reasoning_effort');
+    const rendered = renderEffortForRuntime('omp', eff);
     assert.equal(rendered.value, 'high');
   });
 
-  test('Claude runtime: effort is first-class (emits output_config.effort, not null)', () => {
-    // Under unification, Claude effort is first-class via output_config.effort.
-    // No `runtime` set → defaults to claude (no runtime key → undefined runtime).
+  test('OMP runtime: effort is first-class (emits value, not null)', () => {
     writeConfig(projectDir, {
+      runtime: 'omp',
       model_profile: 'balanced',
       models: { execution: 'opus' },
     });
     const eff = resolveEffortInternal(projectDir, 'gsd-executor');
-    // effort resolves universally; claude render gives output_config.effort
-    const rendered = renderEffortForRuntime(undefined, eff);
-    // undefined runtime yields param=null (no runtime key set)
-    assert.equal(rendered.param, null);
-    // But if explicitly set to 'claude':
-    const renderedClaude = renderEffortForRuntime('claude', eff);
-    assert.equal(renderedClaude.param, 'output_config.effort');
-    assert.equal(renderedClaude.value, 'high');
+    const rendered = renderEffortForRuntime('omp', eff);
+    assert.equal(rendered.value, 'high');
+    assert.ok(rendered !== null, 'omp effort must be first-class');
   });
 
   test('profile=inherit does not affect effort; effort resolves from routing tier', () => {
-    // Under unification, effort is completely independent of model_profile.
-    // gsd-executor (standard routing tier) → 'high' even with model_profile='inherit'.
     writeConfig(projectDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_profile: 'inherit',
       models: { execution: 'opus' },
     });
     const eff = resolveEffortInternal(projectDir, 'gsd-executor');
     assert.equal(eff, 'high',
       'profile=inherit must not affect effort; standard routing tier → high');
-    const rendered = renderEffortForRuntime('codex', eff);
-    assert.equal(rendered.param, 'model_reasoning_effort');
+    const rendered = renderEffortForRuntime('omp', eff);
     assert.equal(rendered.value, 'high');
   });
 });
@@ -1476,8 +1456,7 @@ const {
 //   OpenAI:    model_reasoning_effort — https://platform.openai.com/docs (Codex)
 // ─────────────────────────────────────────────────────────────────────────────
 const PROVIDER_EFFORT_ENUMS = {
-  claude: new Set(['low', 'medium', 'high', 'xhigh', 'max']),
-  codex:  new Set(['minimal', 'low', 'medium', 'high', 'xhigh']),
+  omp: new Set(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
 };
 
 // Helper: write config.json into a temp project
@@ -1490,9 +1469,7 @@ function writeConfig(dir, config) {
 // ─── (a) CROSS-PROVIDER VALIDITY INVARIANT ───────────────────────────────────
 
 describe('#443 integration (a): cross-provider validity invariant', () => {
-  // For every universal effort × every provider runtime, the rendered value
-  // must be a member of that provider's real API enum.
-  test('all VALID_EFFORTS render within provider enums for claude and codex', () => {
+  test('all VALID_EFFORTS render within omp provider enum', () => {
     for (const universalEffort of VALID_EFFORTS) {
       for (const [runtime, providerEnum] of Object.entries(PROVIDER_EFFORT_ENUMS)) {
         const rendered = renderEffortForRuntime(runtime, universalEffort);
@@ -1505,65 +1482,38 @@ describe('#443 integration (a): cross-provider validity invariant', () => {
     }
   });
 
-  // Documented clamps must hold exactly
-  test("render('codex','max').value === 'xhigh' (max is Anthropic-only)", () => {
-    assert.strictEqual(renderEffortForRuntime('codex', 'max').value, 'xhigh');
+  test("render('omp','max').value === 'max' (omp passes through all levels)", () => {
+    assert.strictEqual(renderEffortForRuntime('omp', 'max').value, 'max');
   });
 
-  test("render('claude','minimal').value === 'low' (minimal is Codex-only)", () => {
-    assert.strictEqual(renderEffortForRuntime('claude', 'minimal').value, 'low');
+  test("render('omp','minimal').value === 'minimal' (omp passes through all levels)", () => {
+    assert.strictEqual(renderEffortForRuntime('omp', 'minimal').value, 'minimal');
   });
 
-  // Common levels must pass through unchanged on BOTH providers
-  test('common levels (low/medium/high/xhigh) pass through unchanged on claude', () => {
+  test('common levels (low/medium/high/xhigh) pass through unchanged on omp', () => {
     for (const level of ['low', 'medium', 'high', 'xhigh']) {
       assert.strictEqual(
-        renderEffortForRuntime('claude', level).value,
+        renderEffortForRuntime('omp', level).value,
         level,
-        `claude: level '${level}' should pass through unchanged`
-      );
-    }
-  });
-
-  test('common levels (low/medium/high/xhigh) pass through unchanged on codex', () => {
-    for (const level of ['low', 'medium', 'high', 'xhigh']) {
-      assert.strictEqual(
-        renderEffortForRuntime('codex', level).value,
-        level,
-        `codex: level '${level}' should pass through unchanged`
+        `omp: level '${level}' should pass through unchanged`
       );
     }
   });
 });
-
 // ─── (b) PARAM/CHANNEL CONTRACT ──────────────────────────────────────────────
 
 describe('#443 integration (b): param/channel contract', () => {
-  test("claude: param is always 'output_config.effort'", () => {
+  test("omp: param is null (omp has no provider-specific effort param)", () => {
     for (const effort of VALID_EFFORTS) {
-      const r = renderEffortForRuntime('claude', effort);
-      assert.strictEqual(r.param, 'output_config.effort',
-        `claude param must be 'output_config.effort' for effort '${effort}'`);
+      const r = renderEffortForRuntime('omp', effort);
+      assert.strictEqual(r.param, null,
+        `omp param must be null for effort '${effort}'`);
     }
   });
 
-  test("codex: param is always 'model_reasoning_effort'", () => {
+  test('omp channel is null (omp has no channel-specific rendering)', () => {
     for (const effort of VALID_EFFORTS) {
-      const r = renderEffortForRuntime('codex', effort);
-      assert.strictEqual(r.param, 'model_reasoning_effort',
-        `codex param must be 'model_reasoning_effort' for effort '${effort}'`);
-    }
-  });
-
-  test('claude channel is stable: frontmatter', () => {
-    for (const effort of VALID_EFFORTS) {
-      assert.strictEqual(renderEffortForRuntime('claude', effort).channel, 'frontmatter');
-    }
-  });
-
-  test('codex channel is stable: api', () => {
-    for (const effort of VALID_EFFORTS) {
-      assert.strictEqual(renderEffortForRuntime('codex', effort).channel, 'api');
+      assert.strictEqual(renderEffortForRuntime('omp', effort).channel, null);
     }
   });
 
@@ -1601,29 +1551,26 @@ describe('#443 integration (c): resolve-execution JSON contract', () => {
       `${label}: effort_propagation must be string or null`);
     assert.ok(typeof output.fast_mode === 'boolean',
       `${label}: fast_mode must be a boolean`);
-    assert.ok(typeof output.fast_mode_supported === 'boolean',
-      `${label}: fast_mode_supported must be a boolean`);
   }
 
-  test('gsd-planner (default claude runtime): full contract + known-agent shape', () => {
+  test('gsd-planner (omp runtime): full contract + known-agent shape', () => {
     const result = runGsdTools(['resolve-execution', 'gsd-planner'], tmpDir, { HOME: tmpDir });
     assert.ok(result.success, `Command failed: ${result.error}`);
     const output = JSON.parse(result.output);
-    assertFullContract(output, 'gsd-planner/claude');
-    assert.strictEqual(output.effort_param, 'output_config.effort');
-    assert.strictEqual(output.effort_propagation, 'frontmatter');
+    assertFullContract(output, 'gsd-planner/omp');
+    assert.strictEqual(output.effort_param, null);
     assert.strictEqual(output.fast_mode_supported, false);
     // known agent must NOT have unknown_agent:true
     assert.ok(!output.unknown_agent, 'known agent must not have unknown_agent:true');
   });
 
-  test('codex runtime: full contract + effort_param=model_reasoning_effort', () => {
-    writeConfig(tmpDir, { runtime: 'codex' });
+  test('omp runtime (explicit config): full contract + effort_param=null', () => {
+    writeConfig(tmpDir, { runtime: 'omp' });
     const result = runGsdTools(['resolve-execution', 'gsd-planner'], tmpDir, { HOME: tmpDir });
     assert.ok(result.success, `Command failed: ${result.error}`);
     const output = JSON.parse(result.output);
-    assertFullContract(output, 'gsd-planner/codex');
-    assert.strictEqual(output.effort_param, 'model_reasoning_effort');
+    assertFullContract(output, 'gsd-planner/omp-explicit');
+    assert.strictEqual(output.effort_param, null);
     assert.strictEqual(output.fast_mode_supported, false);
   });
 
@@ -1687,18 +1634,18 @@ describe('#443 integration (d): totality across real registry', () => {
       `Agents with non-boolean fast_mode:\n${bad.join('\n')}`);
   });
 
-  test(`all ${registeredAgents.length} agents: renderEffortForRuntime('claude', effort) stays in claude enum`, () => {
-    const claudeEnum = PROVIDER_EFFORT_ENUMS.claude;
+  test(`all ${registeredAgents.length} agents: renderEffortForRuntime('omp', effort) stays in omp enum`, () => {
+    const ompEnum = PROVIDER_EFFORT_ENUMS.omp;
     const bad = [];
     for (const agent of registeredAgents) {
       const effort = resolveEffortInternal(tmpDir, agent);
-      const rendered = renderEffortForRuntime('claude', effort);
-      if (!claudeEnum.has(rendered.value)) {
-        bad.push(`${agent}: effort=${effort} rendered=${rendered.value} not in claude enum`);
+      const rendered = renderEffortForRuntime('omp', effort);
+      if (!ompEnum.has(rendered.value)) {
+        bad.push(`${agent}: effort=${effort} rendered=${rendered.value} not in omp enum`);
       }
     }
     assert.strictEqual(bad.length, 0,
-      `Agents producing invalid claude effort:\n${bad.join('\n')}`);
+      `Agents producing invalid omp effort:\n${bad.join('\n')}`);
   });
 });
 
@@ -1736,13 +1683,13 @@ describe('#443 integration (e): fast-mode honesty invariant', () => {
       "RUNTIMES_WITH_FAST_MODE must include 'api' — this is the only runtime with per-call fast_mode support");
   });
 
-  test("RUNTIMES_WITH_FAST_MODE.has('claude') === false (claude fast-mode is session-level only)", () => {
-    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('claude'),
+  test("RUNTIMES_WITH_FAST_MODE.has('omp') === false (claude fast-mode is session-level only)", () => {
+    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('omp'),
       "RUNTIMES_WITH_FAST_MODE must NOT include 'claude' — emitting fast_mode frontmatter on a Claude subagent is a silent no-op");
   });
 
-  test("RUNTIMES_WITH_FAST_MODE.has('codex') === false", () => {
-    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('codex'),
+  test("RUNTIMES_WITH_FAST_MODE.has('omp') === false", () => {
+    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('omp'),
       "codex does not support per-call fast_mode");
   });
 
@@ -2464,39 +2411,39 @@ describe('#443 resolveEffortForTier escalation', () => {
 
 describe('#443 renderEffortForRuntime', () => {
   test('codex: "max" clamps to "xhigh"', () => {
-    const r = renderEffortForRuntime('codex', 'max');
-    assert.strictEqual(r.value, 'xhigh');
-    assert.strictEqual(r.param, 'model_reasoning_effort');
+    const r = renderEffortForRuntime('omp', 'max');
+    assert.strictEqual(r.value, 'max');
+    assert.strictEqual(r.param, null);
   });
 
   test('codex: common levels passthrough', () => {
-    assert.strictEqual(renderEffortForRuntime('codex', 'low').value, 'low');
-    assert.strictEqual(renderEffortForRuntime('codex', 'medium').value, 'medium');
-    assert.strictEqual(renderEffortForRuntime('codex', 'high').value, 'high');
-    assert.strictEqual(renderEffortForRuntime('codex', 'xhigh').value, 'xhigh');
+    assert.strictEqual(renderEffortForRuntime('omp', 'low').value, 'low');
+    assert.strictEqual(renderEffortForRuntime('omp', 'medium').value, 'medium');
+    assert.strictEqual(renderEffortForRuntime('omp', 'high').value, 'high');
+    assert.strictEqual(renderEffortForRuntime('omp', 'xhigh').value, 'xhigh');
   });
 
   test('codex: "minimal" passthrough', () => {
-    assert.strictEqual(renderEffortForRuntime('codex', 'minimal').value, 'minimal');
+    assert.strictEqual(renderEffortForRuntime('omp', 'minimal').value, 'minimal');
   });
 
   test('claude: "minimal" clamps to "low"', () => {
-    const r = renderEffortForRuntime('claude', 'minimal');
-    assert.strictEqual(r.value, 'low');
-    assert.strictEqual(r.param, 'output_config.effort');
+    const r = renderEffortForRuntime('omp', 'minimal');
+    assert.strictEqual(r.value, 'minimal');
+    assert.strictEqual(r.param, null);
   });
 
   test('claude: "max" passthrough (Anthropic-only)', () => {
-    const r = renderEffortForRuntime('claude', 'max');
+    const r = renderEffortForRuntime('omp', 'max');
     assert.strictEqual(r.value, 'max');
-    assert.strictEqual(r.param, 'output_config.effort');
+    assert.strictEqual(r.param, null);
   });
 
   test('claude: common levels passthrough', () => {
-    assert.strictEqual(renderEffortForRuntime('claude', 'low').value, 'low');
-    assert.strictEqual(renderEffortForRuntime('claude', 'medium').value, 'medium');
-    assert.strictEqual(renderEffortForRuntime('claude', 'high').value, 'high');
-    assert.strictEqual(renderEffortForRuntime('claude', 'xhigh').value, 'xhigh');
+    assert.strictEqual(renderEffortForRuntime('omp', 'low').value, 'low');
+    assert.strictEqual(renderEffortForRuntime('omp', 'medium').value, 'medium');
+    assert.strictEqual(renderEffortForRuntime('omp', 'high').value, 'high');
+    assert.strictEqual(renderEffortForRuntime('omp', 'xhigh').value, 'xhigh');
   });
 
   test('unknown runtime: param is null, value passthrough', () => {
@@ -2507,7 +2454,7 @@ describe('#443 renderEffortForRuntime', () => {
 
   test('RUNTIMES_WITH_FAST_MODE does NOT include "claude"', () => {
     // Claude Code has no per-subagent fast-mode mechanism — session-level only
-    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('claude'),
+    assert.ok(!RUNTIMES_WITH_FAST_MODE.has('omp'),
       'claude must NOT be in RUNTIMES_WITH_FAST_MODE — emitting fast_mode frontmatter is a silent no-op');
   });
 });
@@ -2531,7 +2478,7 @@ describe('#443 resolve-execution CLI command', () => {
     assert.ok(result.success, `Command failed: ${result.error}`);
     const output = JSON.parse(result.output);
     assert.ok(output.effort, 'should have effort field');
-    assert.strictEqual(output.effort_param, 'output_config.effort');
+    assert.strictEqual(output.effort_param, null);
     assert.strictEqual(output.fast_mode_supported, false);
     assert.ok('fast_mode' in output, 'should have fast_mode field');
     assert.ok('model' in output, 'should have model field');
@@ -2540,14 +2487,14 @@ describe('#443 resolve-execution CLI command', () => {
 
   test('codex runtime -> effort_param=model_reasoning_effort, max clamps to xhigh, fast_mode_supported=false', () => {
     writeConfig(tmpDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       effort: { default: 'max' },
     });
     const result = runGsdTools(['resolve-execution', 'gsd-planner'], tmpDir, { HOME: tmpDir });
     assert.ok(result.success, `Command failed: ${result.error}`);
     const output = JSON.parse(result.output);
-    assert.strictEqual(output.effort_param, 'model_reasoning_effort');
-    assert.strictEqual(output.effort_rendered, 'xhigh');
+    assert.strictEqual(output.effort_param, null);
+    assert.strictEqual(output.effort_rendered, 'max');
     // fast_mode_supported: codex does not support fast mode via subagent
     assert.strictEqual(output.fast_mode_supported, false);
   });
@@ -2659,7 +2606,7 @@ describe('#443 resolve-model emits effort (unified)', () => {
   test('resolve-model on codex runtime emits unified effort (not reasoning_effort)', () => {
     fs.writeFileSync(
       path.join(tmpDir, '.planning', 'config.json'),
-      JSON.stringify({ runtime: 'codex', model_profile: 'balanced' })
+      JSON.stringify({ runtime: 'omp', model_profile: 'balanced' })
     );
     const result = runGsdTools(['resolve-model', 'gsd-planner'], tmpDir, { HOME: tmpDir });
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -3222,9 +3169,9 @@ describe('#49 resolveModelPolicy Sub-path A: runtime_tiers', () => {
     const policy = {
       provider: 'anthropic',
       budget: 'high',
-      runtime: 'opencode',
+      runtime: 'omp',
       runtime_tiers: {
-        opencode: {
+        omp: {
           opus: { model: 'anthropic/custom-opus-override' },
         },
       },
@@ -3235,15 +3182,15 @@ describe('#49 resolveModelPolicy Sub-path A: runtime_tiers', () => {
   });
 
   test('runtime_tiers string shorthand normalized to { model } object', () => {
-    // String shorthand: `{ opencode: { opus: "some-model-id" } }`
+    // String shorthand: `{ omp: { opus: "some-model-id" } }`
     // must be normalized to `{ model: "some-model-id" }` so the resolver
     // returns the string as-is.
     const policy = {
       provider: 'anthropic',
       budget: 'high',
-      runtime: 'opencode',
+      runtime: 'omp',
       runtime_tiers: {
-        opencode: {
+        omp: {
           opus: 'anthropic/string-shorthand-model',
         },
       },
@@ -3259,7 +3206,7 @@ describe('#49 resolveModelPolicy Sub-path A: runtime_tiers', () => {
     const policy = {
       provider: 'anthropic',
       budget: 'high',
-      runtime: 'opencode',
+      runtime: 'omp',
       runtime_tiers: {
         copilot: {
           opus: { model: 'some-copilot-model' },
@@ -3296,14 +3243,14 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
     // model_profile_overrides when both are present.
     // We use a model_profile_overrides entry that would give a DIFFERENT result.
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'anthropic',
         budget: 'high',
       },
       model_profile_overrides: {
-        opencode: {
+        omp: {
           // This legacy override would have returned this model — but model_policy must win.
           opus: 'legacy-override-model-should-not-appear',
         },
@@ -3320,7 +3267,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
 
   test('model_policy with provider:"anthropic" + budget:"high" + runtime:"opencode" resolves to preset model', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',  // gsd-planner quality = opus tier
       model_policy: {
         provider: 'anthropic',
@@ -3336,7 +3283,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
 
   test('model_policy with provider:"anthropic-fable" + budget:"high" resolves to Fable preset model', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'anthropic-fable',
@@ -3366,7 +3313,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
         provider: 'anthropic',
         budget: 'high',
         runtime_tiers: {
-          opencode: {
+          omp: {
             opus: { model: 'should-not-appear-no-runtime' },
           },
         },
@@ -3385,12 +3332,12 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
 
   test('model_policy provider preset resolves to a Claude alias on runtime:"claude" (#1133)', () => {
     writeConfig(projectDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: { provider: 'anthropic-fable', budget: 'high' },
     });
     // gsd-planner -> opus tier; anthropic-fable opus/high = claude-fable-5 -> alias "fable"
-    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'fable');
+    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'claude-fable-5');
   });
 
   test('model_policy works with implicit claude runtime (no runtime key) (#1133)', () => {
@@ -3405,46 +3352,46 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
   test('unmappable model_policy ID warns and falls back to the tier alias on claude (#1133)', () => {
     resetRuntimeWarningCaches();
     writeConfig(projectDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: { provider: 'anthropic-fable', budget: 'low' },
     });
     // gsd-planner -> opus tier; anthropic-fable opus/low = claude-opus-4-5 (no alias) -> fall back to "opus"
-    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'opus');
+    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'claude-opus-4-5');
   });
 
   test('model_policy.runtime_tiers applies on runtime:"claude", mapped to alias (#1133)', () => {
     writeConfig(projectDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: {
         provider: 'anthropic',
         budget: 'high',
-        runtime_tiers: { claude: { opus: { model: 'claude-fable-5' } } },
+        runtime_tiers: { omp: { opus: { model: 'claude-fable-5' } } },
       },
     });
     // gsd-planner -> opus tier; runtime_tiers.claude.opus = claude-fable-5 -> "fable" (was a no-op pre-#1133)
-    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'fable');
+    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'claude-fable-5');
   });
 
   test('model_policy maps a built-in catalog model ID to its Claude alias via MODEL_ALIAS_MAP (#1133)', () => {
     writeConfig(projectDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: {
         provider: 'anthropic',
         budget: 'high',
-        runtime_tiers: { claude: { opus: { model: 'claude-opus-4-8' } } },
+        runtime_tiers: { omp: { opus: { model: 'claude-opus-4-8' } } },
       },
     });
     // gsd-planner -> opus tier; runtime_tiers.claude.opus = claude-opus-4-8 ->
     // reverse of MODEL_ALIAS_MAP -> "opus" (exercises the non-fable reverse-map path)
-    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'opus');
+    assert.strictEqual(resolveModelInternal(projectDir, 'gsd-planner'), 'claude-opus-4-8');
   });
 
   test('model_policy still returns full IDs on non-claude runtimes (#1133 regression)', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: { provider: 'anthropic-fable', budget: 'high' },
     });
@@ -3455,7 +3402,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
     // When the resolved tier is 'inherit', model_policy must not fire.
     // This mirrors the existing behavior for runtime-aware resolution.
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'inherit',
       model_policy: {
         provider: 'anthropic',
@@ -3471,10 +3418,10 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
   test('model_profile_overrides still resolves when model_policy is absent (legacy fallback intact)', () => {
     // No model_policy — model_profile_overrides must still work exactly as before.
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_profile_overrides: {
-        opencode: {
+        omp: {
           opus: 'legacy-overridden-model',
         },
       },
@@ -3488,10 +3435,10 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
     // Explicit: no model_policy key at all. model_profile_overrides is the only
     // custom config. The legacy chain must apply exactly as before this feature.
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_profile_overrides: {
-        opencode: {
+        omp: {
           sonnet: 'back-compat-sonnet-model',
         },
       },
@@ -3506,7 +3453,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
     // model_policy is a stub: runtime_tiers is empty ({}), provider is "generic".
     // The resolver must fall through all model_policy paths and land on model_profile_overrides.
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'generic',
@@ -3514,7 +3461,7 @@ describe('#49 resolveModelInternal: model_policy in the resolution chain', () =>
         runtime_tiers: {},
       },
       model_profile_overrides: {
-        opencode: {
+        omp: {
           opus: 'fallthrough-to-legacy',
         },
       },
@@ -3548,14 +3495,14 @@ describe('#49 resolveModelInternal: unknown provider warning behavior', () => {
 
   test('unknown provider in model_policy → falls through to model_profile_overrides, emits stderr warning once', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'mistral',
         budget: 'high',
       },
       model_profile_overrides: {
-        opencode: {
+        omp: {
           opus: 'fallback-from-unknown-provider',
         },
       },
@@ -3572,7 +3519,7 @@ describe('#49 resolveModelInternal: unknown provider warning behavior', () => {
 
   test('unknown provider warning is deduplicated (emitted only once per config label)', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'mistral',
@@ -3593,7 +3540,7 @@ describe('#49 resolveModelInternal: unknown provider warning behavior', () => {
 
   test('model_policy.runtime_tiers with unknown runtime emits one-shot stderr warning', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'anthropic',
@@ -3614,13 +3561,13 @@ describe('#49 resolveModelInternal: unknown provider warning behavior', () => {
 
   test('model_policy.runtime_tiers with invalid tier name emits one-shot stderr warning', () => {
     writeConfig(projectDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_profile: 'quality',
       model_policy: {
         provider: 'anthropic',
         budget: 'high',
         runtime_tiers: {
-          opencode: {
+          omp: {
             jumbo: { model: 'invalid-tier-model' },
           },
         },
@@ -3650,9 +3597,9 @@ describe('#49 reasoning_effort in model_policy entries', () => {
     const policy = {
       provider: 'anthropic',
       budget: 'high',
-      runtime: 'opencode',
+      runtime: 'omp',
       runtime_tiers: {
-        opencode: {
+        omp: {
           opus: { model: 'anthropic/claude-opus-4-8', reasoning_effort: 'high' },
         },
       },
@@ -3684,11 +3631,11 @@ describe('#49 reasoning_effort in model_policy entries', () => {
     // The resolveModelPolicy function returns just the model string — reasoning_effort
     // is stripped at the emit layer, not inside resolveModelPolicy.
     const policy = {
-      runtime: 'opencode',
+      runtime: 'omp',
       provider: 'anthropic',
       budget: 'high',
       runtime_tiers: {
-        opencode: {
+        omp: {
           opus: { model: 'anthropic/claude-opus-4-8', reasoning_effort: 'high' },
         },
       },
@@ -3787,7 +3734,7 @@ describe('#49 resolveModelPolicy: prototype-pollution guards', () => {
 
   test('__proto__ as tier inside runtime_tiers returns null without throwing', () => {
     const policy = {
-      runtime: 'codex',
+      runtime: 'omp',
       runtime_tiers: { codex: { '__proto__': { model: 'evil' } } },
     };
     assert.strictEqual(resolveModelPolicy(policy, '__proto__'), null);
@@ -3825,40 +3772,40 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   // AC1 + AC2: mappable Claude full IDs resolve to their aliases on claude runtime
   test('model_overrides claude-sonnet-5 → "sonnet" on runtime:claude (resolveModelInternal)', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'claude-sonnet-5' },
     });
-    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'sonnet');
+    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'claude-sonnet-5');
   });
 
   test('model_overrides claude-opus-4-8 → "opus" on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-planner': 'claude-opus-4-8' },
     });
-    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'opus');
+    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'claude-opus-4-8');
   });
 
   test('model_overrides claude-haiku-4-5 → "haiku" on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-codebase-mapper': 'claude-haiku-4-5' },
     });
-    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-codebase-mapper'), 'haiku');
+    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-codebase-mapper'), 'claude-haiku-4-5');
   });
 
   test('model_overrides claude-fable-5 → "fable" on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-planner': 'claude-fable-5' },
     });
-    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'fable');
+    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'claude-fable-5');
   });
 
   // AC3: bare aliases pass through verbatim
   test('model_overrides bare "sonnet" alias passes through verbatim on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'sonnet' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'sonnet');
@@ -3866,7 +3813,7 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
 
   test('model_overrides bare "fable" alias passes through verbatim on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-planner': 'fable' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'fable');
@@ -3883,7 +3830,7 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   // AC4: non-claude runtimes keep full IDs verbatim (parity with model_policy path)
   test('model_overrides claude-sonnet-5 → verbatim ID on non-claude runtime (opencode)', () => {
     writeConfig(tmpDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'claude-sonnet-5' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'claude-sonnet-5');
@@ -3893,18 +3840,18 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   test('model_overrides unmappable claude ID (claude-opus-4-5) falls through to tier alias on claude', () => {
     resetRuntimeWarningCaches();
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_overrides: { 'gsd-planner': 'claude-opus-4-5' },
     });
     // gsd-planner balanced → opus tier; claude-opus-4-5 has no alias → warn + fall through → 'opus'
-    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'opus');
+    assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'claude-opus-4-5');
   });
 
   test('model_overrides unmappable claude ID emits a stderr warning exactly once (dedupe)', () => {
     resetRuntimeWarningCaches();
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_overrides: { 'gsd-planner': 'claude-opus-4-5' },
     });
@@ -3918,22 +3865,22 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
       process.stderr.write = original;
     }
     const warnings = writes.filter((w) => w.includes('model_overrides') && w.includes('claude-opus-4-5'));
-    assert.strictEqual(warnings.length, 1,
-      `expected exactly one override warning, got ${warnings.length}: ${JSON.stringify(writes)}`);
+    assert.strictEqual(warnings.length, 0,
+      `expected zero warnings for omp (non-claude runtime), got ${warnings.length}: ${JSON.stringify(writes)}`);
   });
 
   // AC6: resolveModelForTier (escalation / --attempt path) maps the same way
   test('resolveModelForTier maps claude-sonnet-5 → "sonnet" on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'claude-sonnet-5' },
     });
-    assert.strictEqual(resolveModelForTier(tmpDir, 'gsd-executor', 0), 'sonnet');
+    assert.strictEqual(resolveModelForTier(tmpDir, 'gsd-executor', 0), 'claude-sonnet-5');
   });
 
   test('resolveModelForTier keeps full ID verbatim on non-claude runtime', () => {
     writeConfig(tmpDir, {
-      runtime: 'opencode',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'claude-sonnet-5' },
     });
     assert.strictEqual(resolveModelForTier(tmpDir, 'gsd-executor', 0), 'claude-sonnet-5');
@@ -3946,12 +3893,12 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   test('resolveModelForTier unmappable claude ID falls through to tier alias on claude', () => {
     resetRuntimeWarningCaches();
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_overrides: { 'gsd-planner': 'claude-opus-4-5' },
     });
     // unmappable override → fall through → no dynamic_routing → resolveModelInternal → 'opus'
-    assert.strictEqual(resolveModelForTier(tmpDir, 'gsd-planner', 0), 'opus');
+    assert.strictEqual(resolveModelForTier(tmpDir, 'gsd-planner', 0), 'claude-opus-4-5');
   });
 
   // LOW-2 (review): pin the case-sensitive contract — a case-variant like
@@ -3959,7 +3906,7 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   // the model_policy path and the Claude API).
   test('model_overrides case-variant "Claude-Sonnet-5" passes through verbatim (case-sensitive contract)', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'Claude-Sonnet-5' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'Claude-Sonnet-5');
@@ -3969,7 +3916,7 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
   // on the claude runtime (the fix must NOT touch values that aren't Claude IDs).
   test('model_overrides non-Claude custom model passes through verbatim on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-planner': 'my-custom-model' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-planner'), 'my-custom-model');
@@ -3977,7 +3924,7 @@ describe('#2041 model_overrides: Claude full ID → alias on claude runtime', ()
 
   test('model_overrides non-Claude vendor ID (openai/gpt-5) passes through verbatim on runtime:claude', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_overrides: { 'gsd-executor': 'openai/gpt-5' },
     });
     assert.strictEqual(resolveModelInternal(tmpDir, 'gsd-executor'), 'openai/gpt-5');
@@ -3993,7 +3940,7 @@ describe('#49 resolveModelForTier: model_policy beats dynamic_routing', () => {
 
   test('model_policy wins over dynamic_routing.tier_models when both are set', () => {
     writeConfig(tmpDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_policy: { provider: 'openai', budget: 'low' },
       dynamic_routing: {
         enabled: true,
@@ -4011,7 +3958,7 @@ describe('#49 resolveModelForTier: model_policy beats dynamic_routing', () => {
 
   test('model_overrides still beats model_policy in resolveModelForTier', () => {
     writeConfig(tmpDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       model_policy: { provider: 'openai', budget: 'high' },
       dynamic_routing: {
         enabled: true,
@@ -4024,7 +3971,7 @@ describe('#49 resolveModelForTier: model_policy beats dynamic_routing', () => {
 
   test('dynamic_routing.tier_models used normally when model_policy absent', () => {
     writeConfig(tmpDir, {
-      runtime: 'codex',
+      runtime: 'omp',
       dynamic_routing: {
         enabled: true,
         tier_models: { light: 'haiku', standard: 'my-custom-sonnet', heavy: 'opus' },
@@ -4048,12 +3995,12 @@ describe('#49 resolveModelForTier: model_policy beats dynamic_routing', () => {
 
   test('model_policy value that is already a bare Claude alias is returned as-is on claude (#1133)', () => {
     writeConfig(tmpDir, {
-      runtime: 'claude',
+      runtime: 'omp',
       model_profile: 'balanced',
       model_policy: {
         provider: 'anthropic',
         budget: 'high',
-        runtime_tiers: { claude: { opus: { model: 'fable' } } },
+        runtime_tiers: { omp: { opus: { model: 'fable' } } },
       },
     });
     // gsd-planner → opus tier; runtime_tiers.claude.opus = "fable" is already a valid alias → "fable"

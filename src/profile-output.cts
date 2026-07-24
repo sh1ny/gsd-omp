@@ -741,19 +741,19 @@ function cmdWriteProfile(cwd: string, options: CmdWriteProfileOptions, raw: bool
     // Claude home, so a Codex run wrote the profile under the Claude config dir
     // while Codex advisor-mode (installed under the Codex home) checked the Codex
     // dir and never found it. Mirrors cmdGenerateDevPreferences' runtime resolution.
-    let effectiveRuntime = 'claude';
+    let effectiveRuntime = 'omp';
     try {
       const config = loadConfig(cwd);
       effectiveRuntime = resolveRuntimeNameFromCandidates(
         process.env['GSD_RUNTIME'],
         config['runtime'],
-        'claude'
-      ) || 'claude';
+        'omp'
+      ) || 'omp';
     } catch {
       effectiveRuntime = resolveRuntimeNameFromCandidates(
         process.env['GSD_RUNTIME'],
-        'claude'
-      ) || 'claude';
+        'omp'
+      ) || 'omp';
     }
     // path.join (not a string literal) keeps the cline-install leaked-path lint quiet.
     outputPath = path.join(getGlobalConfigDir(effectiveRuntime), 'gsd-core', 'USER-PROFILE.md');
@@ -919,19 +919,19 @@ function cmdGenerateDevPreferences(cwd: string, options: CmdGenerateDevPreferenc
   // string) so the cline-install leaked-path lint does not flag it.
   let outputPath = options.output;
   if (!outputPath) {
-    let effectiveRuntime = 'claude';
+    let effectiveRuntime = 'omp';
     try {
       const config = loadConfig(cwd);
       effectiveRuntime = resolveRuntimeNameFromCandidates(
         process.env['GSD_RUNTIME'],
         config['runtime'],
-        'claude'
-      ) || 'claude';
+        'omp'
+      ) || 'omp';
     } catch {
       effectiveRuntime = resolveRuntimeNameFromCandidates(
         process.env['GSD_RUNTIME'],
-        'claude'
-      ) || 'claude';
+        'omp'
+      ) || 'omp';
     }
     const skillDir = getGlobalSkillDir(effectiveRuntime, 'gsd-dev-preferences');
     if (!skillDir) {

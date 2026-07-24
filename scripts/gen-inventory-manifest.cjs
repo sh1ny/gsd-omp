@@ -52,12 +52,6 @@ const FAMILIES = [
     filter: (f) => f.endsWith('.cjs'),
     toName: (f) => f,
   },
-  {
-    name: 'hooks',
-    dir: path.join(ROOT, 'hooks'),
-    filter: (f) => /\.(js|sh)$/.test(f),
-    toName: (f) => f,
-  },
 ];
 
 function buildManifest() {

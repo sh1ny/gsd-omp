@@ -5,24 +5,18 @@
  * chains that previously lived in bin/install.js (uninstall() and install()) —
  * the add-a-host tax ADR-1239 Phase B (#1679) eliminates.
  *
- * Because 1.7.0 (ADR-1016 / ADR-1239) makes runtimes pluggable data, the label
- * table is CURATED (a runtime id → short label mapping that cannot be derived
- * from the id alone, e.g. "Claude Code", "Qwen Code", "ZCode"). This test
- * enforces the COVERAGE CONTRACT rather than a frozen per-runtime snapshot:
- *
- *   - every runtime in the capability registry MUST resolve to a distinct,
- *     non-default curated label (a newly-added runtime that forgets to add a
- *     label entry silently falls through to "Claude Code" and fails here);
- *   - the fail-closed fallback returns "Claude Code" for unknown / empty / alias
- *     inputs (raw-id match only — aliases are NOT auto-expanded).
+ * OMP-only fork (F1 capability pruning): the curated label table is now
+ * `{ omp: 'Oh My Pi' }` — every registry runtime except 'omp' is removed. The
+ * test contracts below reflect that: the fallback is "Oh My Pi" (not
+ * "Claude Code"), and the per-runtime new-project override table is empty
+ * (every remaining runtime uses the default /gsd-new-project command).
  *
  * Adding a runtime descriptor requires adding its label to RUNTIME_LABELS (the
  * deliberate curation step); it does NOT require editing a count or golden
  * snapshot here.
  *
  * Voice: these SHORT UI labels are intentionally distinct from the descriptor
- * `title` (the long product name). Two prior-chain inconsistencies are resolved
- * by the canonical map: kimi → 'Kimi CLI'; cline → 'Cline'.
+ * `title` (the long product name).
  *
  * ADR-1239 Phase B (#1679). Behavioral tests only: assert on returned values.
  */
@@ -32,9 +26,9 @@ const assert = require('node:assert/strict');
 const runtimeNamePolicy = require('../gsd-core/bin/lib/runtime-name-policy.cjs');
 const registry = require('../gsd-core/bin/lib/capability-registry.cjs');
 
-const { getRuntimeLabel, getRuntimeNewProjectCommand } = runtimeNamePolicy;
+const { getRuntimeLabel, getRuntimeNewProjectCommand, RUNTIME_LABELS } = runtimeNamePolicy;
 
-const FALLBACK = 'Claude Code';
+const FALLBACK = 'Oh My Pi';
 const RUNTIME_IDS = Object.keys(registry.runtimes);
 
 test('getRuntimeLabel: every registry runtime resolves to a non-empty curated label (coverage contract, count-agnostic)', () => {
@@ -46,22 +40,24 @@ test('getRuntimeLabel: every registry runtime resolves to a non-empty curated la
   }
 });
 
-test('getRuntimeLabel drift guard: no registry runtime except claude falls through to the default (forces a deliberate label per runtime)', () => {
-  // claude's curated label IS the fallback string, so it is exempt. Every other
-  // registry runtime must resolve to a DISTINCT label — otherwise it was added
-  // without a RUNTIME_LABELS entry and is silently masking as "Claude Code".
+test('getRuntimeLabel drift guard: every registry runtime has an explicit RUNTIME_LABELS entry (forces a deliberate label per runtime)', () => {
+  // Every registry runtime must have an explicit entry in RUNTIME_LABELS —
+  // otherwise it silently falls through to the fallback. (In the OMP-only
+  // fork the only registry runtime is 'omp' with label "Oh My Pi" which is
+  // identical to the fallback; the test still enforces the explicit-entry
+test('getRuntimeLabel drift guard: no registry runtime except omp falls through to the default (forces a deliberate label per runtime)', () => {
+  // omp's curated label IS the fallback string "Oh My Pi" (just as claude's
+  // curated "Claude Code" was the pre-F1 fallback), so it is exempt. Every
+  // other registry runtime must resolve to a DISTINCT label — otherwise it was
+  // added without a RUNTIME_LABELS entry and is silently masking as "Oh My Pi".
   for (const id of RUNTIME_IDS) {
-    if (id === 'claude') continue;
+    if (id === 'omp') continue;
     assert.notStrictEqual(
       getRuntimeLabel(id),
       FALLBACK,
       `registry runtime '${id}' resolved to the fallback "${FALLBACK}" — add a distinct entry to RUNTIME_LABELS in src/runtime-name-policy.cts`);
   }
 });
-
-test('getRuntimeLabel fallback: unknown / empty / alias inputs return "Claude Code" (fail-closed, raw-id match only)', () => {
-  assert.strictEqual(getRuntimeLabel('unknown'), FALLBACK);
-  assert.strictEqual(getRuntimeLabel(''), FALLBACK);
   assert.strictEqual(getRuntimeLabel('claude-code'), FALLBACK,
     'getRuntimeLabel("claude-code") must return the default (raw-id match only; aliases are not expanded)');
 });
@@ -72,12 +68,10 @@ test('getRuntimeLabel fallback: unknown / empty / alias inputs return "Claude Co
 // ---------------------------------------------------------------------------
 
 // CURATED override table — runtimes whose /gsd-new-project invocation differs
-// from the default. All other registry runtimes resolve to the default.
-const NEW_PROJECT_OVERRIDES = {
-  codex: '$gsd-new-project',
-  cursor: 'gsd-new-project (mention the skill name)',
-  kimi: '/skill:gsd-new-project',
-};
+// from the default. OMP uses the default; the table is intentionally empty
+// post-F1 (the previous codex/cursor/kimi entries were pruned with those
+// runtimes). When a future non-default runtime is added, place its entry here.
+const NEW_PROJECT_OVERRIDES = {};
 const DEFAULT_CMD = '/gsd-new-project';
 
 test('getRuntimeNewProjectCommand: each override runtime resolves to its curated command', () => {

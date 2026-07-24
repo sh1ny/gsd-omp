@@ -89,10 +89,10 @@ describe('getAgentsDir', () => {
     assert.strictEqual(agentInstallCheck.getAgentsDir(), expected);
   });
 
-  test('defaults to claude when no arg and no GSD_RUNTIME', () => {
+  test('defaults to omp when no arg and no GSD_RUNTIME', () => {
     const fromModule = agentInstallCheck.getAgentsDir();
-    const fromClaude = agentInstallCheck.getAgentsDir('claude');
-    assert.strictEqual(fromModule, fromClaude);
+    const fromOmp = agentInstallCheck.getAgentsDir('omp');
+    assert.strictEqual(fromModule, fromOmp);
   });
 });
 

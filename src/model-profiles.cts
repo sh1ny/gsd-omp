@@ -17,7 +17,6 @@ import {
   nextTier,
   formatAgentToModelMapAsTable,
   getAgentToModelMapForProfile,
-  EFFORT_RENDERING,
   renderEffortForRuntime,
   RUNTIMES_WITH_FAST_MODE,
 } from './model-catalog.cjs';
@@ -32,7 +31,6 @@ export = {
   nextTier,
   formatAgentToModelMapAsTable,
   getAgentToModelMapForProfile,
-  EFFORT_RENDERING,
   renderEffortForRuntime,
   RUNTIMES_WITH_FAST_MODE,
 };

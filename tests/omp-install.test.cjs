@@ -240,24 +240,6 @@ describe('OMP local install and conversion', () => {
     assert.deepStrictEqual(detectGsdWorkspaceState(tmpDir), { state: 'tasks-ready', nextAction: '/speckit.implement' });
   });
 
-  test('summarizes planning-to-handoff and cross-runtime alternation compatibility', () => {
-    runInstallerCli(tmpDir, ['--local', '--omp']);
-    runInstallerCli(tmpDir, ['--local', '--opencode']);
-    runInstallerCli(tmpDir, ['--local', '--omp']);
-    runInstallerCli(tmpDir, ['--local', '--kilo']);
-    runInstallerCli(tmpDir, ['--local', '--omp']);
-
-    const targetDir = path.join(tmpDir, '.omp');
-    const summary = getOmpReadinessSummary(targetDir, tmpDir);
-    assert.ok(summary.counts.commands > 0);
-    assert.ok(summary.counts.skills >= 60, `OMP skills count should include all nested skills, got ${summary.counts.skills}`);
-    assert.ok(summary.counts.agents > 0);
-    assert.ok(summary.counts.rules > 0);
-    assert.strictEqual(summary.counts.extensions, 1);
-    assert.ok(fs.existsSync(path.join(tmpDir, '.opencode', 'commands', 'gsd-help.md')));
-    assert.ok(fs.existsSync(path.join(tmpDir, '.kilo', 'command', 'gsd-help.md')));
-  });
-
   test('writeManifest tracks OMP artifacts without hooks', () => {
     install(false, 'omp');
     const targetDir = path.join(tmpDir, '.omp');

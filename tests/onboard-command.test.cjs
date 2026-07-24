@@ -374,20 +374,20 @@ describe('init onboard public CLI projection', () => {
 
     const result = runGsdTools(['init', 'onboard', '--raw'], tmpDir, {
       HOME: tmpDir,
-      GSD_RUNTIME: 'codex',
+      GSD_RUNTIME: 'omp',
     });
     assert.ok(result.success, `init onboard should succeed: ${result.error}`);
 
     const parsed = JSON.parse(result.output);
     assert.strictEqual(parsed.next_action.kind, 'map-codebase');
-    assert.strictEqual(parsed.next_action.command, '$gsd-map-codebase');
+    assert.strictEqual(parsed.next_action.command, '/gsd-map-codebase');
     assert.deepStrictEqual(parsed.handoff_commands, {
-      map_codebase: '$gsd-map-codebase',
-      map_codebase_fast: '$gsd-map-codebase --fast',
-      ingest_docs: '$gsd-ingest-docs',
-      manager: '$gsd-manager',
-      new_project: '$gsd-new-project',
-      onboard: '$gsd-onboard',
+      map_codebase: '/gsd-map-codebase',
+      map_codebase_fast: '/gsd-map-codebase --fast',
+      ingest_docs: '/gsd-ingest-docs',
+      manager: '/gsd-manager',
+      new_project: '/gsd-new-project',
+      onboard: '/gsd-onboard',
     });
   });
 

@@ -34,35 +34,19 @@
 const { runtimes } = require('./capability-registry.cjs') as { runtimes: Record<string, { runtime: Record<string, unknown> | undefined }> };
 
 /** Valid sandboxTier enum values — mirrors the gen-capability-registry validator vocabulary. */
-const VALID_SANDBOX_TIERS = new Set(['none', 'codex-agent-sandbox']);
+const VALID_SANDBOX_TIERS = new Set(['none']);
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type ConfigInstallSurface =
-  | 'settings-json'
-  | 'codex-toml'
-  | 'copilot-instructions'
-  | 'cline-rules'
-  | 'cursor-hooks-json'
   | 'profile-marker-only'
-  // #2103 — Marketplace/VSIX-distributed hosts (e.g. VS Code) with no CLI
-  // install surface at all. Never dispatched through install()/finishInstall()
-  // (see the ALLOWED_CONFIG_RUNTIMES filter below, which excludes it).
   | 'none';
 
-type FinishPermissionWriter = 'opencode' | 'kilo' | 'antigravity' | null;
+type FinishPermissionWriter = null;
 
-type HooksSurface =
-  | 'settings-json'
-  | 'codex-hooks-json'
-  | 'cursor-hooks-json'
-  | 'cline-rules'
-  | 'copilot-inline'
-  | 'kimi-hooks-toml'
-  | 'windsurf-hooks-json'
-  | 'none';
+type HooksSurface = 'none';
 
 interface RuntimeConfigIntent {
   runtime: string;
@@ -113,11 +97,6 @@ const ALLOWED_CONFIG_RUNTIMES: ReadonlySet<string> = new Set(
 
 /** All valid installSurface values. */
 const INSTALL_SURFACES: ReadonlyArray<ConfigInstallSurface> = Object.freeze([
-  'settings-json',
-  'codex-toml',
-  'copilot-instructions',
-  'cline-rules',
-  'cursor-hooks-json',
   'profile-marker-only',
   'none',
 ]);
@@ -138,13 +117,13 @@ function resolveRuntimeConfigIntent(runtime: string): RuntimeConfigIntent {
     runtime,
     installSurface:         entry['installSurface'] as ConfigInstallSurface,
     writesSharedSettings:   entry['writesSharedSettings'] as boolean,
-    finishPermissionWriter: permissionWriter == null ? null : permissionWriter as FinishPermissionWriter,
+    finishPermissionWriter: permissionWriter == null ? null : null,
   };
 }
 
 function resolveInstallPlanFromRuntimes(runtimeDescriptors: RuntimeDescriptorMap, runtime: string): InstallPlan {
   const desc = runtimeDescriptors[runtime]?.runtime;
-  if (!desc) throw new TypeError(`Unknown runtime for install plan: ${runtime}`);
+  if (!desc) throw new TypeError(`Unknown runtime for install plan: ${runtime}. This GSD fork supports OMP only.`);
   if (desc['hooksSurface'] == null) {
     throw new TypeError(`runtime.hooksSurface is required for install plan: ${runtime}`);
   }
@@ -157,7 +136,7 @@ function resolveInstallPlanFromRuntimes(runtimeDescriptors: RuntimeDescriptorMap
     runtime,
     installSurface:         desc['installSurface'] as ConfigInstallSurface,
     writesSharedSettings:   desc['writesSharedSettings'] as boolean,
-    finishPermissionWriter: permissionWriter == null ? null : permissionWriter as FinishPermissionWriter,
+    finishPermissionWriter: permissionWriter == null ? null : null,
     hookEvents:             desc['hookEvents'] as string | undefined,
     extendedHookEvents:     Array.isArray(desc['extendedHookEvents']) ? [...desc['extendedHookEvents'] as string[]] : [],
     hooksSurface:           desc['hooksSurface'] as HooksSurface,

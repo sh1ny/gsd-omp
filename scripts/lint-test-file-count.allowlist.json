@@ -23,6 +23,7 @@
     },
     "milestone": {
       "files": [
+        "bug-978-milestone-complete-force.test.cjs",
         "milestone-archive.test.cjs",
         "milestone-helper.test.cjs",
         "milestone-prefixed-convention.test.cjs",
@@ -81,8 +82,6 @@
     },
     "install": {
       "files": [
-        "install-minimal-hooks.test.cjs",
-        "install-nested-layout.test.cjs",
         "install-path-detection.test.cjs",
         "install-regressions.test.cjs",
         "install-runtime-artifacts.test.cjs",

@@ -177,7 +177,7 @@ describe('HOST_COMMAND_ROUTERS registry', async () => {
       'assumption-delta', 'requirements', 'gap-analysis', 'milestone', 'progress',
       'uat', 'stats', 'todo', 'scaffold', 'loop', 'phase-plan-index',
       'state-snapshot', 'summary-extract', 'websearch', 'workstream', 'worktree',
-      'docs-init', 'learnings', 'teams-status', 'detect-custom-files',
+      'docs-init', 'learnings', 'detect-custom-files',
       'from-gsd2', 'prompt-budget', 'update-context', 'classify-confidence',
       'package-legitimacy', 'effort', 'user-story', 'drift-guard',
     ];

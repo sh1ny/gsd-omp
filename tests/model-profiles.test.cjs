@@ -235,12 +235,12 @@ describe('formatAgentToModelMapAsTable', () => {
  * agent_runtime was not surfaced at all.
  *
  * After the fix:
- *  - GSD_RUNTIME=opencode + OPENCODE_CONFIG_DIR pointing at a temp dir →
+ *  - GSD_RUNTIME=omp + HOME pointing at a temp dir →
  *    agents_installed=true, agent_runtime='opencode', agents_dir under the
  *    opencode config dir
  *  - No GSD_RUNTIME + GSD_AGENTS_DIR pointing at a temp dir →
- *    agents_installed=true, agent_runtime='claude'
- *  - GSD_RUNTIME=opencode but agents dir empty →
+ *    agents_installed=true, agent_runtime.*omp'
+ *  - GSD_RUNTIME=omp but agents dir empty →
  *    agents_installed=false, agent_runtime='opencode'
  */
 
@@ -259,7 +259,7 @@ const EXPECTED_AGENTS = Object.keys(MODEL_PROFILES);
  * the expected agent .md files.
  */
 function createAgentsInConfigDir(configDir) {
-  const agentsDir = path.join(configDir, 'agents');
+  const agentsDir = path.join(configDir, '.omp', 'profiles', 'chinese', 'agent', 'agents');
   fs.mkdirSync(agentsDir, { recursive: true });
   for (const name of EXPECTED_AGENTS) {
     fs.writeFileSync(
@@ -272,32 +272,32 @@ function createAgentsInConfigDir(configDir) {
 
 describe('bug #384 — getAgentsDir() is runtime-aware', () => {
   let tmpDir;
-  let opencodeConfigDir;
+  let homeDir;
 
   beforeEach(() => {
     tmpDir = createTempProject();
     // Separate temp dir to act as the opencode global config dir
-    opencodeConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-test-opencode-'));
+    homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gsd-test-opencode-'));
   });
 
   afterEach(() => {
     cleanup(tmpDir);
-    cleanup(opencodeConfigDir);
+    cleanup(homeDir);
   });
 
   // ── Test 1: opencode runtime resolves the opencode agents path ──────────────
 
-  test('GSD_RUNTIME=opencode finds agents under OPENCODE_CONFIG_DIR/agents', () => {
+  test('GSD_RUNTIME=omp finds agents under HOME/agents', () => {
     // Place agents under the opencode config dir that getGlobalConfigDir('opencode')
-    // will return when OPENCODE_CONFIG_DIR is set.
-    const agentsDir = createAgentsInConfigDir(opencodeConfigDir);
+    // will return when HOME is set.
+    const agentsDir = createAgentsInConfigDir(homeDir);
 
     const result = runGsdTools(
       ['init', 'quick', 'test description', '--raw'],
       tmpDir,
       {
-        GSD_RUNTIME: 'opencode',
-        OPENCODE_CONFIG_DIR: opencodeConfigDir,
+        GSD_RUNTIME: 'omp',
+        HOME: homeDir,
         // Ensure the process HOME does NOT have a conflicting ~/.claude/agents
         // that might accidentally produce a false positive via GSD_AGENTS_DIR
         // (we must NOT set GSD_AGENTS_DIR here — the whole point is that the fix
@@ -309,23 +309,28 @@ describe('bug #384 — getAgentsDir() is runtime-aware', () => {
     const output = JSON.parse(result.output);
 
     assert.strictEqual(output.agents_installed, true,
-      `agents_installed must be true when agents exist under OPENCODE_CONFIG_DIR/agents. ` +
+      `agents_installed must be true when agents exist under HOME/agents. ` +
       `agents_dir=${output.agents_dir}, agent_runtime=${output.agent_runtime}`);
 
-    assert.strictEqual(output.agent_runtime, 'opencode',
-      'agent_runtime must be "opencode" when GSD_RUNTIME=opencode');
+    assert.strictEqual(output.agent_runtime, 'omp',
+      'agent_runtime must be "omp" when GSD_RUNTIME=omp');
 
     assert.strictEqual(output.agents_dir, agentsDir,
-      `agents_dir must point at the opencode agents dir (${agentsDir}), got: ${output.agents_dir}`);
+      `agents_dir must point at the omp agents dir (${agentsDir}), got: ${output.agents_dir}`);
   });
 
-  // ── Test 2: claude fallback via GSD_AGENTS_DIR ──────────────────────────────
+  // ── Test 2: omp default runtime via GSD_AGENTS_DIR ───────────────────────────
 
-  test('default runtime (no GSD_RUNTIME) with GSD_AGENTS_DIR → agents_installed=true, agent_runtime=claude', () => {
-    // Classic GSD_AGENTS_DIR override: no runtime set, use the env shortcut
-    createAgentsInConfigDir(tmpDir);
-    // GSD_AGENTS_DIR points directly at the agents dir (not the config dir)
+  test('default runtime (no GSD_RUNTIME) with GSD_AGENTS_DIR → agents_installed=true, agent_runtime=omp', () => {
+    // Create agents directly in the GSD_AGENTS_DIR path
     const directAgentsDir = path.join(tmpDir, 'agents');
+    fs.mkdirSync(directAgentsDir, { recursive: true });
+    for (const name of EXPECTED_AGENTS) {
+      fs.writeFileSync(
+        path.join(directAgentsDir, `${name}.md`),
+        `---\nname: ${name}\ndescription: Test agent\ntools: Read, Bash\ncolor: cyan\n---\nAgent content.\n`
+      );
+    }
 
     const result = runGsdTools(
       ['init', 'quick', 'test description', '--raw'],
@@ -344,8 +349,8 @@ describe('bug #384 — getAgentsDir() is runtime-aware', () => {
       `agents_installed must be true when GSD_AGENTS_DIR points at a populated agents dir. ` +
       `agents_dir=${output.agents_dir}`);
 
-    assert.strictEqual(output.agent_runtime, 'claude',
-      'agent_runtime must be "claude" when no GSD_RUNTIME is set');
+    assert.strictEqual(output.agent_runtime, 'omp',
+      'agent_runtime must be "omp" when no GSD_RUNTIME is set');
 
     assert.strictEqual(output.agents_dir, directAgentsDir,
       `agents_dir must match GSD_AGENTS_DIR override`);
@@ -353,17 +358,17 @@ describe('bug #384 — getAgentsDir() is runtime-aware', () => {
 
   // ── Test 3 (negative): opencode runtime, empty agents dir ───────────────────
 
-  test('GSD_RUNTIME=opencode with empty agents dir → agents_installed=false, agent_runtime still surfaced', () => {
+  test('GSD_RUNTIME=omp with empty agents dir → agents_installed=false, agent_runtime still surfaced', () => {
     // Create the opencode config dir but leave agents/ empty (no files)
-    const emptyAgentsDir = path.join(opencodeConfigDir, 'agents');
+    const emptyAgentsDir = path.join(homeDir, 'agents');
     fs.mkdirSync(emptyAgentsDir, { recursive: true });
 
     const result = runGsdTools(
       ['init', 'quick', 'test description', '--raw'],
       tmpDir,
       {
-        GSD_RUNTIME: 'opencode',
-        OPENCODE_CONFIG_DIR: opencodeConfigDir,
+        GSD_RUNTIME: 'omp',
+        HOME: homeDir,
       }
     );
     assert.ok(result.success, `Command failed: ${result.error}`);
@@ -373,7 +378,7 @@ describe('bug #384 — getAgentsDir() is runtime-aware', () => {
     assert.strictEqual(output.agents_installed, false,
       'agents_installed must be false when agents dir is empty');
 
-    assert.strictEqual(output.agent_runtime, 'opencode',
+    assert.strictEqual(output.agent_runtime, 'omp',
       'agent_runtime must still be surfaced even when agents are missing');
   });
 });

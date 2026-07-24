@@ -18,19 +18,7 @@ export type RuntimeDirEntry = [string, string];
 // candidate dirs). Kept here, not derived from the installer's getDirName,
 // because update detection probes ALL historical dirs per runtime.
 export const RUNTIME_DIRS: RuntimeDirEntry[] = [
-  ['claude', '.claude'],
-  ['opencode', '.config/opencode'],
-  ['opencode', '.opencode'],
-  ['antigravity', '.gemini/antigravity-ide'],
-  ['antigravity', '.gemini/antigravity-cli'],
-  ['antigravity', '.gemini/antigravity'],
-  ['antigravity', '.agents'], // local Antigravity install dir canonical (#791; bin/install.js getDirName('antigravity'))
-  ['antigravity', '.agent'], // local Antigravity install dir legacy (#503; backward-compat with pre-#791 installs)
-  ['windsurf', '.windsurf'], // local Windsurf workflow dir canonical (#1615; bin/install.js getDirName('windsurf'))
-  ['windsurf', '.devin'],    // local Devin Desktop install dir legacy (#1085; backward-compat)
-  ['kilo', '.config/kilo'],
-  ['kilo', '.kilo'],
-  ['codex', '.codex'],
+  ['omp', '.omp'],
 ];
 
 const SEMVER_PREFIX = /^\d+\.\d+\.\d+/;
@@ -77,18 +65,11 @@ export interface InferPreferredRuntimeOpts {
 // Infer the preferred runtime from preferredConfigDir config files, then env.
 export function inferPreferredRuntime({ fs, env, preferredConfigDir }: InferPreferredRuntimeOpts): string {
   if (preferredConfigDir) {
-    if (fs.exists(path.join(preferredConfigDir, 'kilo.json')) ||
-        fs.exists(path.join(preferredConfigDir, 'kilo.jsonc'))) return 'kilo';
-    if (fs.exists(path.join(preferredConfigDir, 'opencode.json')) ||
-        fs.exists(path.join(preferredConfigDir, 'opencode.jsonc'))) return 'opencode';
-    if (fs.exists(path.join(preferredConfigDir, 'config.toml'))) return 'codex';
+    if (fs.exists(path.join(preferredConfigDir, 'omp.json')) ||
+        fs.exists(path.join(preferredConfigDir, 'omp.jsonc'))) return 'omp';
   }
-  if (env['CODEX_HOME']) return 'codex';
-  if (env['ANTIGRAVITY_CONFIG_DIR']) return 'antigravity';
-  if (env['KILO_CONFIG_DIR'] || env['KILO_CONFIG']) return 'kilo';
-  if (env['OPENCODE_CONFIG_DIR'] || env['OPENCODE_CONFIG']) return 'opencode';
-  if (env['CLAUDE_CONFIG_DIR']) return 'claude';
-  return 'claude';
+  if (env['OMP_CONFIG_DIR'] || env['PI_CONFIG_DIR']) return 'omp';
+  return 'omp';
 }
 
 export interface EnvRuntimeDirsOpts {
@@ -100,15 +81,8 @@ export interface EnvRuntimeDirsOpts {
 export function envRuntimeDirs({ env, home }: EnvRuntimeDirsOpts): RuntimeDirEntry[] {
   const out: RuntimeDirEntry[] = [];
   const ex = (v: string | undefined) => expandHome(v, home);
-  if (env['CLAUDE_CONFIG_DIR']) out.push(['claude', ex(env['CLAUDE_CONFIG_DIR'])]);
-  if (env['ANTIGRAVITY_CONFIG_DIR']) out.push(['antigravity', ex(env['ANTIGRAVITY_CONFIG_DIR'])]);
-  if (env['KILO_CONFIG_DIR']) out.push(['kilo', ex(env['KILO_CONFIG_DIR'])]);
-  else if (env['KILO_CONFIG']) out.push(['kilo', path.dirname(ex(env['KILO_CONFIG']))]);
-  else if (env['XDG_CONFIG_HOME']) out.push(['kilo', path.join(ex(env['XDG_CONFIG_HOME']), 'kilo')]);
-  if (env['OPENCODE_CONFIG_DIR']) out.push(['opencode', ex(env['OPENCODE_CONFIG_DIR'])]);
-  else if (env['OPENCODE_CONFIG']) out.push(['opencode', path.dirname(ex(env['OPENCODE_CONFIG']))]);
-  else if (env['XDG_CONFIG_HOME']) out.push(['opencode', path.join(ex(env['XDG_CONFIG_HOME']), 'opencode')]);
-  if (env['CODEX_HOME']) out.push(['codex', ex(env['CODEX_HOME'])]);
+  if (env['OMP_CONFIG_DIR']) out.push(['omp', ex(env['OMP_CONFIG_DIR'])]);
+  if (env['PI_CONFIG_DIR']) out.push(['omp', ex(env['PI_CONFIG_DIR'])]);
   return out;
 }
 
@@ -206,7 +180,7 @@ export function resolveUpdateContext({
   if (globalRuntime) {
     return { installedVersion: '0.0.0', scope: 'GLOBAL', runtime: globalRuntime, gsdDir: globalDir };
   }
-  return { installedVersion: '0.0.0', scope: 'UNKNOWN', runtime: 'claude', gsdDir: '' };
+  return { installedVersion: '0.0.0', scope: 'UNKNOWN', runtime: 'omp', gsdDir: '' };
 }
 
 export interface LoadUpdateContextOpts {

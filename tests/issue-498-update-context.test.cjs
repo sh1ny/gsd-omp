@@ -48,61 +48,61 @@ function ver(dir) { return `${dir}/gsd-core/VERSION`; }
 function marker(dir) { return `${dir}/gsd-core/workflows/update.md`; }
 
 describe('resolveUpdateContext: scope cascade', () => {
-  test('GLOBAL claude install under $HOME/.claude', () => {
-    const fs = fakeFs({ [ver(`${HOME}/.claude`)]: '1.40.0\n', [marker(`${HOME}/.claude`)]: 'x' });
+  test('GLOBAL omp install under $HOME/.claude', () => {
+    const fs = fakeFs({ [ver(`${HOME}/.omp`)]: '1.40.0\n', [marker(`${HOME}/.omp`)]: 'x' });
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs });
     assert.equal(r.installedVersion, '1.40.0');
     assert.equal(r.scope, 'GLOBAL');
-    assert.equal(r.runtime, 'claude');
-    assert.ok(sameDir(r.gsdDir, `${HOME}/.claude`), `gsdDir was ${r.gsdDir}`);
+    assert.equal(r.runtime, 'omp');
+    assert.ok(sameDir(r.gsdDir, `${HOME}/.omp`), `gsdDir was ${r.gsdDir}`);
   });
 
-  test('LOCAL install under ./.claude takes priority over global', () => {
+  test('LOCAL install under ./.omp takes priority over global', () => {
     const fs = fakeFs({
-      [ver(`${CWD}/.claude`)]: '1.39.0\n', [marker(`${CWD}/.claude`)]: 'x',
-      [ver(`${HOME}/.claude`)]: '1.40.0\n', [marker(`${HOME}/.claude`)]: 'x',
+      [ver(`${CWD}/.omp`)]: '1.39.0\n', [marker(`${CWD}/.omp`)]: 'x',
+      [ver(`${HOME}/.omp`)]: '1.40.0\n', [marker(`${HOME}/.omp`)]: 'x',
     });
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs });
     assert.equal(r.scope, 'LOCAL');
     assert.equal(r.installedVersion, '1.39.0');
-    assert.ok(sameDir(r.gsdDir, `${CWD}/.claude`), `gsdDir was ${r.gsdDir}`);
+    assert.ok(sameDir(r.gsdDir, `${CWD}/.omp`), `gsdDir was ${r.gsdDir}`);
   });
 
   test('cwd === home does NOT misdetect as LOCAL (dedup)', () => {
-    const fs = fakeFs({ [ver(`${HOME}/.claude`)]: '1.40.0\n', [marker(`${HOME}/.claude`)]: 'x' });
+    const fs = fakeFs({ [ver(`${HOME}/.omp`)]: '1.40.0\n', [marker(`${HOME}/.omp`)]: 'x' });
     const r = resolveUpdateContext({ home: HOME, cwd: HOME, env: {}, fs });
     assert.equal(r.scope, 'GLOBAL');
   });
 
   test('runtime detected but VERSION missing -> 0.0.0, keep scope/runtime', () => {
-    const fs = fakeFs({ [marker(`${HOME}/.codex`)]: 'x' });
+    const fs = fakeFs({ [marker(`${HOME}/.omp`)]: 'x' });
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs });
     assert.equal(r.installedVersion, '0.0.0');
     assert.equal(r.scope, 'GLOBAL');
-    assert.equal(r.runtime, 'codex');
+    assert.equal(r.runtime, 'omp');
   });
 
-  test('no install anywhere -> UNKNOWN / claude / empty gsdDir', () => {
+  test('no install anywhere -> UNKNOWN / omp / empty gsdDir', () => {
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs: fakeFs({}) });
-    assert.deepEqual(r, { installedVersion: '0.0.0', scope: 'UNKNOWN', runtime: 'claude', gsdDir: '' });
+    assert.deepEqual(r, { installedVersion: '0.0.0', scope: 'UNKNOWN', runtime: 'omp', gsdDir: '' });
   });
 });
 
 describe('resolveUpdateContext: runtime probing + env overrides', () => {
-  test('opencode global under $HOME/.config/opencode', () => {
-    const dir = `${HOME}/.config/opencode`;
+  test('omp global under \$HOME\/.omp', () => {
+    const dir = `${HOME}/.omp`;
     const fs = fakeFs({ [ver(dir)]: '1.40.0\n', [marker(dir)]: 'x' });
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs });
-    assert.equal(r.runtime, 'opencode');
+    assert.equal(r.runtime, 'omp');
     assert.ok(sameDir(r.gsdDir, dir), `gsdDir was ${r.gsdDir}`);
   });
 
-  test('CLAUDE_CONFIG_DIR env override locates a custom global dir', () => {
+  test('OMP_CONFIG_DIR env override locates a custom global dir', () => {
     const custom = '/opt/claude-home';
     const fs = fakeFs({ [ver(custom)]: '1.40.0\n', [marker(custom)]: 'x' });
-    const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: { CLAUDE_CONFIG_DIR: custom }, fs });
+    const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: { OMP_CONFIG_DIR: custom }, fs });
     assert.equal(r.scope, 'GLOBAL');
-    assert.equal(r.runtime, 'claude');
+    assert.equal(r.runtime, 'omp');
     assert.ok(sameDir(r.gsdDir, custom), `gsdDir was ${r.gsdDir}`);
   });
 
@@ -111,10 +111,10 @@ describe('resolveUpdateContext: runtime probing + env overrides', () => {
     const fs = fakeFs({ [ver(custom)]: '1.41.0\n', [marker(custom)]: 'x' });
     const r = resolveUpdateContext({
       home: HOME, cwd: CWD, env: {}, fs,
-      preferredConfigDir: custom, preferredRuntime: 'kilo',
+      preferredConfigDir: custom, preferredRuntime: 'omp',
     });
     assert.equal(r.scope, 'GLOBAL');
-    assert.equal(r.runtime, 'kilo');
+    assert.equal(r.runtime, 'omp');
     assert.ok(sameDir(r.gsdDir, custom), `gsdDir was ${r.gsdDir}`);
     assert.equal(r.installedVersion, '1.41.0');
   });
@@ -129,14 +129,14 @@ describe('gsd-tools update-context (CLI): emits the JSON contract', () => {
       nodeFs.writeFileSync(path.join(tmp, 'gsd-core', 'workflows', 'update.md'), 'x');
       const out = execFileSync(
         process.execPath,
-        [GSD_TOOLS, 'update-context', '--config-dir', tmp, '--runtime', 'kilo', '--json'],
+        [GSD_TOOLS, 'update-context', '--config-dir', tmp, '--runtime', 'omp', '--json'],
         { encoding: 'utf8', env: { ...process.env, GSD_TEST_MODE: '1' } },
       );
       const ctx = JSON.parse(out);
       assert.deepEqual(Object.keys(ctx).sort(), ['gsdDir', 'installedVersion', 'runtime', 'scope']);
       assert.equal(ctx.installedVersion, '1.42.0');
       assert.equal(ctx.scope, 'GLOBAL');
-      assert.equal(ctx.runtime, 'kilo');
+      assert.equal(ctx.runtime, 'omp');
     } finally {
       cleanup(tmp);
     }
@@ -162,12 +162,12 @@ describe('resolveUpdateContext: parity with the old inline bash (adversarial-rev
   test('a VERSION-only dir (no update.md marker) is NOT trusted as a real version', () => {
     // The old cascade required BOTH VERSION and the update.md marker before
     // trusting the version; a partial dir falls to 0.0.0 but keeps scope.
-    const fs = fakeFs({ [ver(`${HOME}/.claude`)]: '1.40.0\n' }); // marker absent
+    const fs = fakeFs({ [ver(`${HOME}/.omp`)]: '1.40.0\n' }); // marker absent
     const r = resolveUpdateContext({ home: HOME, cwd: CWD, env: {}, fs });
     assert.equal(r.installedVersion, '0.0.0', 'VERSION-only dir must not be trusted');
     assert.equal(r.scope, 'GLOBAL');
-    assert.equal(r.runtime, 'claude');
-    assert.ok(sameDir(r.gsdDir, `${HOME}/.claude`), `gsdDir was ${r.gsdDir}`);
+    assert.equal(r.runtime, 'omp');
+    assert.ok(sameDir(r.gsdDir, `${HOME}/.omp`), `gsdDir was ${r.gsdDir}`);
   });
 
   test('fast path also requires the marker: VERSION-only preferredConfigDir -> 0.0.0', () => {
@@ -177,7 +177,7 @@ describe('resolveUpdateContext: parity with the old inline bash (adversarial-rev
     const custom = '/opt/gsd-partial';
     const fs = fakeFs({ [ver(custom)]: '1.41.0\n' }); // marker absent
     const r = resolveUpdateContext({
-      home: HOME, cwd: CWD, env: {}, fs, preferredConfigDir: custom, preferredRuntime: 'kilo',
+      home: HOME, cwd: CWD, env: {}, fs, preferredConfigDir: custom, preferredRuntime: 'omp',
     });
     assert.equal(r.installedVersion, '0.0.0', 'VERSION-only fast path must not be trusted');
     assert.equal(r.scope, 'GLOBAL');
@@ -187,10 +187,10 @@ describe('resolveUpdateContext: parity with the old inline bash (adversarial-rev
   test('partial install with cwd===home does NOT misdetect as LOCAL (fallback dedup)', () => {
     // Same same-path dedup the trusted path uses must apply to the 0.0.0
     // fallback: a VERSION-only ~/.claude probed from cwd===home is GLOBAL.
-    const fs = fakeFs({ [ver(`${HOME}/.claude`)]: '1.40.0\n' }); // marker absent
+    const fs = fakeFs({ [ver(`${HOME}/.omp`)]: '1.40.0\n' }); // marker absent
     const r = resolveUpdateContext({ home: HOME, cwd: HOME, env: {}, fs });
     assert.equal(r.installedVersion, '0.0.0');
     assert.equal(r.scope, 'GLOBAL', 'cwd===home partial must be GLOBAL, not LOCAL');
-    assert.ok(sameDir(r.gsdDir, `${HOME}/.claude`), `gsdDir was ${r.gsdDir}`);
+    assert.ok(sameDir(r.gsdDir, `${HOME}/.omp`), `gsdDir was ${r.gsdDir}`);
   });
 });

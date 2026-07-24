@@ -25,7 +25,6 @@ const yaml = require('js-yaml');
 const ROOT = path.resolve(__dirname, '..');
 
 const SKILL_FILES = [
-  'skills/gsd-mempalace-capture/SKILL.md',
   'commands/gsd/mempalace-capture.md',
 ];
 

@@ -118,7 +118,7 @@ const SAFE_DEFAULTS: HostIntegrationAxes = {
   effortSurface:  'none',
 };
 
-const PROFILE_BASELINES: Readonly<Record<'programmatic-cli' | 'declarative-cli' | 'ide', HostIntegrationAxes>> =
+const PROFILE_BASELINES: Readonly<Record<'programmatic-cli' | 'declarative-cli', HostIntegrationAxes>> =
   Object.freeze({
     'programmatic-cli': Object.freeze({
       embeddingMode:  'imperative',
@@ -140,17 +140,6 @@ const PROFILE_BASELINES: Readonly<Record<'programmatic-cli' | 'declarative-cli' 
       stateIO:        'filesystem',
       transport:      'mcp',
       runtime:        'node',
-      effortSurface:  'none',
-    } as HostIntegrationAxes),
-    'ide': Object.freeze({
-      embeddingMode:  'imperative',
-      commandSurface: 'palette',
-      dispatch: Object.freeze({ namedDispatch: true, nested: true, maxDepth: 5, background: true, subagentToolkit: 'full', backgroundDispatch: true }),
-      modelMode:      'active',
-      hookBus:        'engine',
-      stateIO:        'sandboxed-storage',
-      transport:      'mcp',
-      runtime:        'sandboxed-web',
       effortSurface:  'none',
     } as HostIntegrationAxes),
   });
@@ -255,9 +244,8 @@ function degradationFor(point: InterfacePoint, axes: Partial<HostIntegrationAxes
  * Classify a partial set of integration axes into a named profile.
  * Returns null when no profile can be determined.
  */
-function profileOf(axes: Partial<HostIntegrationAxes>): 'programmatic-cli' | 'declarative-cli' | 'ide' | null {
+function profileOf(axes: Partial<HostIntegrationAxes>): 'programmatic-cli' | 'declarative-cli' | null {
   const a = axes as Record<string, unknown>;
-  if (a.embeddingMode === 'imperative' && a.runtime === 'sandboxed-web') return 'ide';
   if (a.embeddingMode === 'imperative')   return 'programmatic-cli';
   if (a.embeddingMode === 'declarative')  return 'declarative-cli';
   return null;
@@ -602,22 +590,13 @@ function resolveDispatchType(requested: unknown, dispatch: UnvalidatedDispatch):
   // (the GSD default) so every runtime already in the field keeps working.
   return requested;
 }
-
 // ---------------------------------------------------------------------------
 // Managed-hook event surface per hookEvents dialect (ADR-1239 / ADR-1016)
 // ---------------------------------------------------------------------------
 
-// Host-fireable MANAGED-hook events per `hookEvents` dialect. `hookEvents` is the
-// managed-hook dialect — the event names GSD writes into a DECLARATIVE host's
-// settings.json (claude = SessionStart/PreToolUse/…; gemini = BeforeTool/AfterTool).
-// This is DISTINCT from the extension-system event surface (below): a host's
-// plugin/extension API fires a different, plugin-owned event set. The two must
-// not be conflated (ADR-1239 amendment / #1943 — the former 'opencode-subset'
-// `hookEvents` value was this conflation; it is now `extensionEvents: opencode`).
-const HOOK_EVENT_SURFACES: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  claude: Object.freeze(['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop', 'SessionEnd', 'PreCompact']),
-  gemini: Object.freeze(['SessionStart', 'BeforeTool', 'AfterTool', 'SessionEnd']),
-});
+// OMP has hooksSurface: "none" — no managed-hook event surface is consumed.
+// The empty table preserves the exported symbol for API compatibility.
+const HOOK_EVENT_SURFACES: Readonly<Record<string, readonly string[]>> = Object.freeze({});
 
 /**
  * Resolve the managed-hook event surface for a `hookEvents` dialect.
@@ -627,59 +606,15 @@ function hookEventSurfaceFor(hookEvents: unknown): readonly string[] | null {
   if (typeof hookEvents !== 'string') return null;
   return HOOK_EVENT_SURFACES[hookEvents] || null;
 }
-
-// ---------------------------------------------------------------------------
 // Extension-system event surface (ADR-1239 amendment / #1943)
 // ---------------------------------------------------------------------------
 
 // The events a host's PLUGIN/EXTENSION API exposes — for imperative-embedding
-// hosts that load GSD as a plugin. This is a SEPARATE vocabulary + descriptor
-// field (`extensionEvents`) from `hookEvents`: hookEvents = the managed-hook
-// dialect (declarative hosts' settings.json); extensionEvents = the plugin-owned
-// event subset (imperative hosts' extension API). They are not the same thing.
+// hosts that load GSD as a plugin. `extensionEvents` is the descriptor field
+// selecting which vocabulary applies.
 //
-// Values are documentation-sourced (ADR-1239 §research): OpenCode ~25 plugin
-// events (session/tool/file/permission); pi ~30 fine-grained extension events;
-// 'none' = the host exposes no extension surface and the engine owns the bus
-// (VS Code). Declarative hosts (no plugin API) do not set `extensionEvents`.
-// OpenCode's plugin event surface (ADR-1239 §research; ~25 documented events,
-// GSD binds this subset). Hoisted to a named const — rather than duplicated
-// object literals — so the `kilo` dialect below (#2093) can reuse the IDENTICAL
-// array instead of a copy-pasted one that could silently drift out of sync.
-const OPENCODE_EXTENSION_EVENTS = Object.freeze([
-  'session.created', 'session.idle', 'experimental.session.compacting',
-  'tool.execute.before', 'tool.execute.after', 'file.edited',
-  // #2087 — additional documented plugin events GSD binds (opencode.ai/docs/plugins):
-  // permission decisions + session error surface.
-  'permission.asked', 'permission.replied', 'session.error',
-]);
-
+// The 'pi' entry is the OMP host event API (NOT the deleted pi runtime).
 const EXTENSION_EVENT_SURFACES: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  opencode: OPENCODE_EXTENSION_EVENTS,
-  // #2093 — Kilo Code is an OpenCode fork sharing the same plugin/extension
-  // event bus (host hook bus, UPGRADE 1): reuses OPENCODE_EXTENSION_EVENTS
-  // verbatim (not a re-derivation), so the two dialects stay pinned together
-  // by construction. See .kilo/plugins/gsd-core.js (copied verbatim from
-  // .opencode/plugins/gsd-core.js).
-  kilo: OPENCODE_EXTENSION_EVENTS,
-  // #2091 — Hermes Agent real plugin hook vocabulary (13 events).
-  // Cite: https://github.com/nousresearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md
-  // Replaces the borrowed `hookEvents: "claude"` 6-event surface that silently
-  // never fired on Hermes.
-  hermes: Object.freeze([
-    'pre_tool_call', 'post_tool_call',
-    'pre_llm_call', 'post_llm_call',
-    'on_session_start', 'on_session_end',
-    'on_session_finalize', 'on_session_reset',
-    'subagent_start', 'subagent_stop',
-    'pre_gateway_dispatch', 'pre_approval_request',
-    'transform_tool_result',
-  ]),
-  // #2102 Stage 2 — pi's real ExtensionAPI event vocabulary (~30 fine-grained
-  // extension events; documentation-sourced, ADR-1239 §research). Replaces the
-  // placeholder single-event ['tool_call'] surface — the Stage 1 value only
-  // covered the one event pi/gsd.cjs happened to bind at the time, not the
-  // full declared surface.
   pi: Object.freeze([
     'session_start', 'project_trust', 'resources_discover', 'input',
     'before_agent_start', 'agent_start', 'message_start', 'message_update',

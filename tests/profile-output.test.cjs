@@ -123,24 +123,24 @@ describe('write-profile command', () => {
       dimensions: { communication_style: { rating: 'terse-direct', confidence: 'HIGH' } },
     };
     const analysisPath = path.join(tmpDir, 'analysis.json');
-    const codexHome = path.join(tmpDir, 'codex-home');
+    const homeDir = path.join(tmpDir, 'omp-home');
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
 
     const result = runGsdTools(
       ['write-profile', '--input', analysisPath, '--raw'],
       tmpDir,
-      { CODEX_HOME: codexHome, GSD_RUNTIME: 'codex' }
+      { HOME: homeDir, GSD_RUNTIME: 'omp' }
     );
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
-    // Must land in the Codex home (so Codex advisor-mode finds it), NOT .claude.
-    assert.strictEqual(out.profile_path, path.join(codexHome, 'gsd-core', 'USER-PROFILE.md'));
+    // Must land in the OMP home (so Codex advisor-mode finds it), NOT .claude.
+    assert.strictEqual(out.profile_path, path.join(homeDir, '.omp', 'profiles', 'chinese', 'agent', 'gsd-core', 'USER-PROFILE.md'));
     assert.ok(!out.profile_path.includes(`${path.sep}.claude${path.sep}`),
-      `codex profile must not be written under .claude; got ${out.profile_path}`);
+      `omp profile must not be written under .claude; got ${out.profile_path}`);
     assert.ok(fs.existsSync(out.profile_path), 'runtime-aware profile should be written to disk');
   });
 
-  test('#1114: default output is the .claude config home for the claude runtime', () => {
+  test('#1114: default output is the omp config home for the omp runtime', () => {
     const analysis = {
       profile_version: '1.0',
       dimensions: { communication_style: { rating: 'terse-direct', confidence: 'HIGH' } },
@@ -149,39 +149,38 @@ describe('write-profile command', () => {
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
 
     // Clear ambient runtime vars so the test is hermetic regardless of the
-    // developer's shell (a stray GSD_RUNTIME/CLAUDE_CONFIG_DIR would redirect it).
+    // developer's shell (a stray GSD_RUNTIME would redirect it).
     const result = runGsdTools(['write-profile', '--input', analysisPath, '--raw'], tmpDir,
-      { HOME: tmpDir, GSD_RUNTIME: '', CLAUDE_CONFIG_DIR: '', CODEX_HOME: '' });
+      { HOME: tmpDir, GSD_RUNTIME: '', CLAUDE_CONFIG_DIR: '' });
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
-    // os.homedir() returns HOME verbatim, so assert on the suffix to stay
-    // robust against macOS /var → /private/var symlink normalization.
+    // Default runtime is omp → profile goes under .omp/profiles/chinese/agent/
     assert.ok(
-      out.profile_path.endsWith(path.join('.claude', 'gsd-core', 'USER-PROFILE.md')),
-      `claude profile must be under .claude/gsd-core; got ${out.profile_path}`
+      out.profile_path.endsWith(path.join('.omp', 'profiles', 'chinese', 'agent', 'gsd-core', 'USER-PROFILE.md')),
+      `omp profile must be under .omp/profiles/chinese/agent/gsd-core; got ${out.profile_path}`
     );
     assert.ok(fs.existsSync(out.profile_path), 'profile should be written to disk');
   });
 
-  test('#1114: config.runtime=codex (no GSD_RUNTIME) also resolves the Codex home', () => {
+  test('#1114: config.runtime=omp (no GSD_RUNTIME) also resolves the OMP home', () => {
     const analysis = {
       profile_version: '1.0',
       dimensions: { communication_style: { rating: 'terse-direct', confidence: 'HIGH' } },
     };
     const analysisPath = path.join(tmpDir, 'analysis.json');
-    const codexHome = path.join(tmpDir, 'codex-home');
+    const homeDir = path.join(tmpDir, 'omp-home');
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
-    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ runtime: 'codex' }));
+    fs.writeFileSync(path.join(tmpDir, '.planning', 'config.json'), JSON.stringify({ runtime: 'omp' }));
 
     // No GSD_RUNTIME — the runtime must be read from config.runtime.
     const result = runGsdTools(
       ['write-profile', '--input', analysisPath, '--raw'],
       tmpDir,
-      { CODEX_HOME: codexHome, GSD_RUNTIME: '' }
+      { HOME: homeDir, GSD_RUNTIME: '' }
     );
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
-    assert.strictEqual(out.profile_path, path.join(codexHome, 'gsd-core', 'USER-PROFILE.md'));
+    assert.strictEqual(out.profile_path, path.join(homeDir, '.omp', 'profiles', 'chinese', 'agent', 'gsd-core', 'USER-PROFILE.md'));
   });
 
   test('errors when --input is missing', () => {
@@ -259,18 +258,7 @@ describe('generate-claude-md command', () => {
     assert.ok(content.includes('.codex/skills/'));
     assert.ok(!content.includes('gsd-core/skills'));
   });
-
-  test('codex runtime aliases default output to AGENTS.md', () => {
-    const result = runGsdTools(
-      ['generate-claude-md', '--auto', '--raw'],
-      tmpDir,
-      { GSD_RUNTIME: 'codex-cli' }
-    );
-    assert.ok(result.success, `Failed: ${result.error}`);
-    assert.ok(fs.existsSync(path.join(tmpDir, 'AGENTS.md')), 'AGENTS.md should be generated for codex aliases');
-  });
 });
-
 // ─── generate-dev-preferences ─────────────────────────────────────────────────
 
 describe('generate-dev-preferences command', () => {
@@ -311,7 +299,7 @@ describe('generate-dev-preferences command', () => {
     assert.ok(out.command_path || out.command_name, 'should return command output');
   });
 
-  test('uses runtime-aware skills dir for codex by default', () => {
+  test('uses runtime-aware skills dir for omp by default', () => {
     const analysis = {
       profile_version: '1.0',
       dimensions: {
@@ -319,65 +307,18 @@ describe('generate-dev-preferences command', () => {
       },
     };
     const analysisPath = path.join(tmpDir, 'analysis.json');
-    const codexHome = path.join(tmpDir, 'codex-home');
+    const homeDir = path.join(tmpDir, 'omp-home');
     fs.writeFileSync(analysisPath, JSON.stringify(analysis));
 
     const result = runGsdTools(
       ['generate-dev-preferences', '--analysis', analysisPath, '--raw'],
       tmpDir,
-      // #2088 (ADR-1239 upgrade 3): Codex skills resolve to $HOME/.agents/skills
-      // (HOME-relative), so sandbox HOME to keep the dev-preferences write inside
-      // the temp dir rather than the developer's real ~/.agents/skills.
-      { CODEX_HOME: codexHome, GSD_RUNTIME: 'codex', HOME: codexHome, USERPROFILE: codexHome }
+      { HOME: homeDir, GSD_RUNTIME: 'omp', USERPROFILE: homeDir }
     );
     assert.ok(result.success, `Failed: ${result.error}`);
     const out = JSON.parse(result.output);
-    assert.strictEqual(out.command_path, path.join(codexHome, '.agents', 'skills', 'gsd-dev-preferences', 'SKILL.md'));
+    assert.strictEqual(out.command_path, path.join(homeDir, '.omp', 'profiles', 'chinese', 'agent', 'skills', 'gsd-dev-preferences', 'SKILL.md'));
     assert.ok(fs.existsSync(out.command_path), 'runtime-aware output should be written');
-  });
-
-  test('canonicalizes codex runtime aliases for skills output path', () => {
-    const analysis = {
-      profile_version: '1.0',
-      dimensions: {
-        communication_style: { rating: 'terse-direct', confidence: 'HIGH' },
-      },
-    };
-    const analysisPath = path.join(tmpDir, 'analysis.json');
-    const codexHome = path.join(tmpDir, 'codex-home');
-    fs.writeFileSync(analysisPath, JSON.stringify(analysis));
-
-    const result = runGsdTools(
-      ['generate-dev-preferences', '--analysis', analysisPath, '--raw'],
-      tmpDir,
-      // #2088: codex-app alias canonicalizes to codex → $HOME/.agents/skills.
-      { CODEX_HOME: codexHome, GSD_RUNTIME: 'codex-app', HOME: codexHome, USERPROFILE: codexHome }
-    );
-    assert.ok(result.success, `Failed: ${result.error}`);
-    const out = JSON.parse(result.output);
-    assert.strictEqual(out.command_path, path.join(codexHome, '.agents', 'skills', 'gsd-dev-preferences', 'SKILL.md'));
-  });
-
-  test('uses runtime-aware skills dir for cline by default (#782)', () => {
-    // Cline >= v3.48.0 is skills-capable: ~/.cline/skills/<name>/SKILL.md
-    const analysis = {
-      profile_version: '1.0',
-      dimensions: {
-        communication_style: { rating: 'terse-direct', confidence: 'HIGH' },
-      },
-    };
-    const analysisPath = path.join(tmpDir, 'analysis.json');
-    const clineHome = path.join(tmpDir, 'cline-home');
-    fs.writeFileSync(analysisPath, JSON.stringify(analysis));
-
-    const result = runGsdTools(
-      ['generate-dev-preferences', '--analysis', analysisPath, '--raw'],
-      tmpDir,
-      { CLINE_CONFIG_DIR: clineHome, GSD_RUNTIME: 'cline' }
-    );
-    assert.ok(result.success, `cline skills output should succeed: ${result.error}`);
-    const out = JSON.parse(result.output);
-    assert.strictEqual(out.command_path, path.join(clineHome, 'skills', 'gsd-dev-preferences', 'SKILL.md'));
   });
 });
 
@@ -389,26 +330,13 @@ describe('generate-dev-preferences command', () => {
   const { describe: __foldDescribe } = require('node:test');
   __foldDescribe("folded:enh-2415-claude-md-link-mode (consolidation epic #1969 B3 #1972)", () => {
 'use strict';
-
-// allow-test-rule: source-text-is-the-product (see #2415)
-// Reads .md/.json/.yml product files whose deployed text IS what the
-// runtime loads — testing text content tests the deployed contract.
-
-/**
- * Tests for claude_md_assembly "link" mode (#2415).
- * Verifies that generate-claude-md writes @-references instead of inlined
- * content when claude_md_assembly.mode is "link".
- */
-
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const helpers = require('./helpers.cjs');
-
 const { cmdGenerateClaudeMd } = require('../gsd-core/bin/lib/profile-output.cjs');
-
 const _dirsToClean = [];
 after(() => { for (const d of _dirsToClean) helpers.cleanup(d); });
 

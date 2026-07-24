@@ -72,9 +72,8 @@ function createRuntimeArtifactInstallPlan(args) {
     const resolvedTarget = posixNormalize(path.resolve(layout.configDir));
     const homeDir = posixNormalize(homedirFn());
     const isGlobal = scope === 'global';
-    const isOpencode = layout.runtime === 'opencode';
     const isWindowsHost = (platform ?? process.platform) === 'win32';
-    const pathPrefix = conversionExports._computePathPrefix({ isGlobal, isOpencode, isWindowsHost, resolvedTarget, homeDir });
+    const pathPrefix = conversionExports._computePathPrefix({ isGlobal, isWindowsHost, resolvedTarget, homeDir });
     const attribution = resolveAttribution ? resolveAttribution(layout.runtime) : undefined;
     const agentCtx = { runtime: layout.runtime, pathPrefix, attribution };
     for (const kind of layout.kinds) {
@@ -99,7 +98,7 @@ function createRuntimeArtifactInstallPlan(args) {
                 const rewrittenDir = rewriteStagedCommandBodies(stagedDir, rewriteOpts);
                 sourceDir = addCleanupDir(cleanupDirs, stagedDir, rewrittenDir);
             }
-            else if (kind.kind === 'skills' || kind.kind === 'kimi-agents') {
+            else if (kind.kind === 'skills') {
                 const rewrittenDir = rewriteStagedSkillBodies(stagedDir, rewriteOpts);
                 sourceDir = addCleanupDir(cleanupDirs, stagedDir, rewrittenDir);
             }

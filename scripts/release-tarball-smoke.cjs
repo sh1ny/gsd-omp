@@ -28,9 +28,9 @@
  *     - Assert commands/gsd/<cmd>.md exists in the installed package
  *     - Parse the .md for a workflow @-import or inline reference
  *     - Assert the referenced workflow .md exists in the installed package
- *   If 'init' is in lifecycleCommands, runs `gsd-core --local --claude`
+ *   If 'init' is in lifecycleCommands, runs `gsd-core --local --omp`
  *   in fixtureDir to verify the installer is callable (INIT_FAILED on crash).
- *   Non-interactive: --local --claude flags skip all prompts.
+ *   Non-interactive: --local --omp flags skip all prompts.
  *
  * Workflow-body checks (Cycle 3 — informational):
  *   - Scans all installed gsd-core/workflows/*.md for /gsd:<known-cmd>
@@ -195,8 +195,8 @@ function findInstallerBin(installPrefix) {
  * Structured parser — only inspects individual lines; never regexes on the
  * whole-file string. Two recognised forms (in priority order):
  *
- *   1. @-import line:  `@~/.claude/gsd-core/workflows/<name>.md`
- *   2. Inline mention: any line containing `~/.claude/gsd-core/workflows/<name>.md`
+ *   1. @-import line:  `@~/.omp/gsd-core/workflows/<name>.md`
+ *   2. Inline mention: any line containing `~/.omp/gsd-core/workflows/<name>.md`
  *      (takes the LAST occurrence so conditional-dispatch files resolve to the
  *       default / unconditional branch, e.g. discuss-phase.md)
  *
@@ -409,14 +409,14 @@ function runSmoke({
       };
     }
 
-    // Non-interactive: --local --claude installs to .claude/ in cwd (fixtureDir).
+    // Non-interactive: --local --omp installs to .omp/ in cwd (fixtureDir).
     // GSD_TEST_MODE must be cleared — install.js skips its main() block when
     // GSD_TEST_MODE is set, which would cause the installer to exit 0 silently
     // without actually creating any files.
     const initEnv = { ...process.env };
     delete initEnv.GSD_TEST_MODE;
 
-    const initInvocation = binInvocation(installerBin, ['--local', '--claude']);
+    const initInvocation = binInvocation(installerBin, ['--local', '--omp']);
     const initResult = spawnSync(
       initInvocation.command,
       initInvocation.args,
@@ -445,8 +445,8 @@ function runSmoke({
 
     // Verify expected dirs were created
     const expectedDirs = [
-      path.join(fixtureDir, '.claude', 'commands'),
-      path.join(fixtureDir, '.claude', 'gsd-core'),
+      path.join(fixtureDir, '.omp', 'commands'),
+      path.join(fixtureDir, '.omp', 'gsd-core'),
     ];
     for (const dir of expectedDirs) {
       if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
