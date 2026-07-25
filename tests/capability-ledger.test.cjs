@@ -7,8 +7,9 @@
 
 'use strict';
 
-const { test, mock } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -149,21 +150,21 @@ test('writeLedger leaves no orphan .tmp file after a successful write', (t) => {
 function withDirFsyncError(t, errno, fn) {
   const dirFds = new Set();
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (flags === 'r') dirFds.add(fd); // writeLedger opens the containing DIR with 'r'
     return fd;
   });
   const realClose = fs.closeSync.bind(fs);
   const closed = [];
-  const closeMock = mock.method(fs, 'closeSync', function (fd) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd) {
     // Remove the fd from the tracked set BEFORE closing: once closed the OS may reuse the same
     // fd NUMBER for an unrelated open, which must NOT be treated as the directory fd.
     if (dirFds.has(fd)) { closed.push(fd); dirFds.delete(fd); }
     return realClose(fd);
   });
   const realFsync = fs.fsyncSync.bind(fs);
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd) {
     if (dirFds.has(fd)) { const e = new Error(`${errno}: injected`); e.code = errno; throw e; }
     return realFsync(fd);
   });
@@ -512,7 +513,7 @@ test('writeLedger throws when renameSync fails (no silent truncating fallback, L
 
   let renameCalls = 0;
 
-  const renameMock = mock.method(fs, 'renameSync', (_src, _dest) => {
+  const renameMock = mockMethod(t, fs, 'renameSync', (_src, _dest) => {
     renameCalls++;
     // Simulate a cross-device rename failure.
     const err = new Error('EXDEV: cross-device link not permitted');
@@ -730,7 +731,7 @@ test('writeLedger opens the tmp file with an exclusive flag (wx / O_EXCL) and do
   // We use a wrapper that delegates to the real openSync.
   const realOpenSync = fs.openSync.bind(fs);
   let sawExclusiveFlag = false;
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     if (typeof flags === 'string' && flags.includes('x')) sawExclusiveFlag = true;
     if (typeof flags === 'number' && (flags & fs.constants.O_EXCL)) sawExclusiveFlag = true;
     return realOpenSync(p, flags, ...rest);
@@ -772,7 +773,7 @@ test('writeLedger: O_EXCL prevents write through a pre-planted symlink at the tm
   // Mock randomBytes to return the known nonce so we know exactly what tmp path
   // writeLedger will compute (finding 15: make the test non-vacuous).
   const crypto = require('node:crypto');
-  const randomBytesMock = mock.method(crypto, 'randomBytes', (_n) => {
+  const randomBytesMock = mockMethod(t, crypto, 'randomBytes', (_n) => {
     return Buffer.from(knownNonce, 'hex');
   });
   t.after(() => randomBytesMock.mock.restore());
@@ -805,7 +806,7 @@ test('writeLedger cleans up the tmp file when renameSync fails (finding-4)', (t)
   t.after(() => cleanup(dir));
 
   // Mock renameSync to fail with EXDEV (after the tmp write has already succeeded).
-  const renameMock = mock.method(fs, 'renameSync', (_src, _dest) => {
+  const renameMock = mockMethod(t, fs, 'renameSync', (_src, _dest) => {
     const err = new Error('EXDEV: cross-device link not permitted');
     err.code = 'EXDEV';
     throw err;
@@ -952,7 +953,7 @@ test('writeLedger cleans up the tmp file when the write to the fd fails (issue-2
   // writeLedger now uses fs.writeFileSync(fd, content) which is a full-buffer write.
   // Mock writeFileSync to throw when called with a number fd (the tmp file fd).
   const realWriteFileSync = fs.writeFileSync.bind(fs);
-  const writeFileSyncMock = mock.method(fs, 'writeFileSync', function (fdOrPath, content, ...rest) {
+  const writeFileSyncMock = mockMethod(t, fs, 'writeFileSync', function (fdOrPath, content, ...rest) {
     if (typeof fdOrPath === 'number') {
       // This is the fd-based write inside writeLedger — simulate ENOSPC.
       const err = new Error('ENOSPC: no space left on device');
@@ -1235,7 +1236,7 @@ test('finding-2: writeLedger throws when closeSync fails (EIO) and leaves no orp
   // Mock closeSync to throw EIO once (for the tmp-fd call from writeLedger).
   let closeCalls = 0;
   const realCloseSync = fs.closeSync.bind(fs);
-  const closeMock = mock.method(fs, 'closeSync', function (fd, ...rest) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd, ...rest) {
     closeCalls++;
     if (closeCalls === 1) {
       // Simulate a delayed-writeback failure on first close (the tmp file fd).
@@ -1737,15 +1738,15 @@ test('DUR-1: writeLedger fsyncs the file fd before closeSync before renameSync (
   const realClose = fs.closeSync.bind(fs);
   const realRename = fs.renameSync.bind(fs);
 
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd, ...rest) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd, ...rest) {
     order.push({ op: 'fsync', fd });
     return realFsync(fd, ...rest);
   });
-  const closeMock = mock.method(fs, 'closeSync', function (fd, ...rest) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd, ...rest) {
     order.push({ op: 'close', fd });
     return realClose(fd, ...rest);
   });
-  const renameMock = mock.method(fs, 'renameSync', function (src, dest, ...rest) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dest, ...rest) {
     order.push({ op: 'rename' });
     return realRename(src, dest, ...rest);
   });
@@ -1794,13 +1795,13 @@ test('DUR-1: writeLedger unlinks temp and rethrows when fsyncSync fails; no rena
 
   let renameCalled = false;
   const realRename = fs.renameSync.bind(fs);
-  const renameMock = mock.method(fs, 'renameSync', function (src, dest, ...rest) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dest, ...rest) {
     renameCalled = true;
     return realRename(src, dest, ...rest);
   });
   // Make the FIRST fsyncSync (the file-fd fsync) throw EIO.
   let fsyncCalls = 0;
-  const fsyncMock = mock.method(fs, 'fsyncSync', function () {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function () {
     fsyncCalls++;
     const err = new Error('EIO: i/o error on fsync');
     err.code = 'EIO';
@@ -1844,7 +1845,7 @@ test('DUR-2: writeLedger fsyncs the containing directory after a successful rena
   const realFsync = fs.fsyncSync.bind(fs);
   // Track which fds correspond to a directory open ('r' on the runtimeDir).
   const dirFds = new Set();
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (path.resolve(p) === path.resolve(dir) && flags === 'r') {
       dirOpened = true;
@@ -1852,7 +1853,7 @@ test('DUR-2: writeLedger fsyncs the containing directory after a successful rena
     }
     return fd;
   });
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd, ...rest) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd, ...rest) {
     if (dirFds.has(fd)) dirFsynced = true;
     return realFsync(fd, ...rest);
   });
@@ -1871,12 +1872,12 @@ test('DUR-2: writeLedger tolerates EPERM from the directory fsync (still writes 
   const realFsync = fs.fsyncSync.bind(fs);
   const realOpen = fs.openSync.bind(fs);
   const dirFds = new Set();
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (path.resolve(p) === path.resolve(dir) && flags === 'r') dirFds.add(fd);
     return fd;
   });
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd, ...rest) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd, ...rest) {
     if (dirFds.has(fd)) {
       const err = new Error('EPERM: operation not permitted, fsync');
       err.code = 'EPERM';
@@ -1908,7 +1909,7 @@ test('W-1: writeLedger retries a transient EPERM/EBUSY renameSync before succeed
   // Fail the rename twice with EBUSY, then succeed on the third attempt.
   let renameCalls = 0;
   const realRename = fs.renameSync.bind(fs);
-  const renameMock = mock.method(fs, 'renameSync', function (src, dest, ...rest) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dest, ...rest) {
     renameCalls++;
     if (renameCalls <= 2) {
       const err = new Error('EBUSY: resource busy or locked, rename');

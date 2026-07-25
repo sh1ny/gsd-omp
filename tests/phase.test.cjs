@@ -16,6 +16,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('fs');
 const path = require('path');
 const os = require('node:os');
@@ -7948,7 +7949,7 @@ describe('issue #4 (CJS): cmdPhaseComplete — idempotency (blind-increment bug)
     const originalState = fs.readFileSync(statePath, 'utf8');
     const originalWriteFileSync = fs.writeFileSync;
 
-    t.mock.method(fs, 'writeFileSync', function injectedStateWriteFailure(target, ...args) {
+    mockMethod(t, fs, 'writeFileSync', function injectedStateWriteFailure(target, ...args) {
       const targetPath = String(target);
       const isStatePublish = targetPath === statePath || targetPath === `${statePath}.tmp.${process.pid}`;
       if (isStatePublish) {
@@ -7984,7 +7985,7 @@ describe('issue #4 (CJS): cmdPhaseComplete — idempotency (blind-increment bug)
     const originalReq = fs.readFileSync(reqPath, 'utf8');
     const originalWriteFileSync = fs.writeFileSync;
 
-    t.mock.method(fs, 'writeFileSync', function injectedRequirementsWriteFailure(target, ...args) {
+    mockMethod(t, fs, 'writeFileSync', function injectedRequirementsWriteFailure(target, ...args) {
       const targetPath = String(target);
       if (targetPath === reqPath || targetPath === `${reqPath}.tmp.${process.pid}`) {
         const err = new Error('injected REQUIREMENTS.md write failure');
@@ -8013,7 +8014,7 @@ describe('issue #4 (CJS): cmdPhaseComplete — idempotency (blind-increment bug)
     const originalWriteFileSync = fs.writeFileSync;
     let requirementsWriteFailed = false;
 
-    t.mock.method(fs, 'writeFileSync', function injectedRollbackFailure(target, ...args) {
+    mockMethod(t, fs, 'writeFileSync', function injectedRollbackFailure(target, ...args) {
       const targetPath = String(target);
       if (targetPath === reqPath || targetPath === `${reqPath}.tmp.${process.pid}`) {
         requirementsWriteFailed = true;

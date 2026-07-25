@@ -1151,8 +1151,9 @@ describe('bug #580: local .sh hooks on Claude/Windows must NOT wrap with bash.ex
 
 'use strict';
 
-const { test, mock } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
@@ -1199,7 +1200,7 @@ test('platformWriteSync recovers when renameSync fails (EXDEV cross-device fallb
   // Simulate rename failing once (e.g. cross-device move on a CI runner
   // with overlayfs). The fallback path must write the content directly.
   let renameCalls = 0;
-  const renameMock = mock.method(fs, 'renameSync', (_src, _dest) => {
+  const renameMock = mockMethod(t, fs, 'renameSync', (_src, _dest) => {
     renameCalls++;
     const err = new Error('EXDEV: cross-device link not permitted');
     err.code = 'EXDEV';
@@ -1227,7 +1228,7 @@ test('platformWriteSync retries a transient EPERM rename and publishes atomicall
   // A reader briefly holds the target open → rename throws EPERM once, then clears.
   let renameCalls = 0;
   const originalRename = fs.renameSync;
-  const renameMock = mock.method(fs, 'renameSync', (src, dest) => {
+  const renameMock = mockMethod(t, fs, 'renameSync', (src, dest) => {
     renameCalls++;
     if (renameCalls === 1) {
       const err = new Error('EPERM: a reader holds the target open');
@@ -1257,7 +1258,7 @@ test('platformWriteSync surfaces a PERSISTENT EPERM instead of truncating a conc
   const sizeBefore = fs.statSync(file).size;
 
   let renameCalls = 0;
-  const renameMock = mock.method(fs, 'renameSync', () => {
+  const renameMock = mockMethod(t, fs, 'renameSync', () => {
     renameCalls++;
     const err = new Error('EPERM: reader holds the target open');
     err.code = 'EPERM';
@@ -1292,7 +1293,7 @@ test('platformWriteSync falls back when initial tmp writeFileSync fails (ENOSPC)
   // SECOND writeFileSync (the fallback, direct to filePath) succeeds.
   let writeCalls = 0;
   const realWrite = fs.writeFileSync;
-  const writeMock = mock.method(fs, 'writeFileSync', function (target, data, opts) {
+  const writeMock = mockMethod(t, fs, 'writeFileSync', function (target, data, opts) {
     writeCalls++;
     if (writeCalls === 1) {
       // First call is to the tmp path.
@@ -1325,7 +1326,7 @@ test('platformWriteSync propagates the FALLBACK error when both tmp and fallback
   const file = path.join(dir, 'config.json');
 
   let writeCalls = 0;
-  const writeMock = mock.method(fs, 'writeFileSync', function () {
+  const writeMock = mockMethod(t, fs, 'writeFileSync', function () {
     writeCalls++;
     const err = new Error(
       writeCalls === 1
@@ -1362,7 +1363,7 @@ test('platformWriteSync propagates mkdirSync failure unchanged (no swallowed par
   t.after(() => cleanup(dir));
   const file = path.join(dir, 'deep', 'nested', 'config.json');
 
-  const mkdirMock = mock.method(fs, 'mkdirSync', () => {
+  const mkdirMock = mockMethod(t, fs, 'mkdirSync', () => {
     const err = new Error('EACCES: permission denied creating directory');
     err.code = 'EACCES';
     throw err;
@@ -1470,7 +1471,7 @@ test('platformEnsureDir propagates EACCES when parent dir is unwritable', (t) =>
   const dir = mkScratch('ensure-fail');
   t.after(() => cleanup(dir));
 
-  const mkdirMock = mock.method(fs, 'mkdirSync', () => {
+  const mkdirMock = mockMethod(t, fs, 'mkdirSync', () => {
     const err = new Error('EACCES: permission denied');
     err.code = 'EACCES';
     throw err;
@@ -1574,7 +1575,7 @@ test('platformWriteSync survives a concurrent collision on the same target path'
   // instead of delegating.
   let renameCalls = 0;
   const originalRename = fs.renameSync;
-  const renameMock = mock.method(fs, 'renameSync', (src, dest) => {
+  const renameMock = mockMethod(t, fs, 'renameSync', (src, dest) => {
     renameCalls++;
     if (renameCalls === 1) {
       const err = new Error('EBUSY: file is locked');

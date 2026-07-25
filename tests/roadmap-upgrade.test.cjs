@@ -1,7 +1,8 @@
 'use strict';
 
-const { test, describe, mock } = require('node:test');
+const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execSync } = require('node:child_process');
@@ -65,7 +66,7 @@ describe('roadmap upgrade rollback (#1542)', () => {
     // phase renames AND the ROADMAP rewrite have already happened when rollback
     // fires — exactly the half-migrated state the old git rollback could not undo.
     const realWrite = fs.writeFileSync;
-    const writeMock = mock.method(fs, 'writeFileSync', function (target, data, opts) {
+    const writeMock = mockMethod(t, fs, 'writeFileSync', function (target, data, opts) {
       if (String(target).endsWith('config.json')) {
         const err = new Error('EIO: simulated write failure');
         err.code = 'EIO';

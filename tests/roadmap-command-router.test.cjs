@@ -1,7 +1,8 @@
 'use strict';
 
-const { describe, test, before, after, beforeEach, afterEach, mock } = require('node:test');
+const { describe, test, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod, mockRaw } = require('./helpers/mock-method.cjs');
 
 const { routeRoadmapCommand } = require('../gsd-core/bin/lib/roadmap-command-router.cjs');
 const roadmapUpgrade = require('../gsd-core/bin/lib/roadmap-upgrade.cjs');
@@ -92,25 +93,26 @@ describe('roadmap-command-router', () => {
 describe('roadmap upgrade — hub contract + --convention parsing (#1538)', () => {
   let exitCalls;
   let applyCalls;
+  const hookMocks = [];
 
   beforeEach(() => {
     exitCalls = [];
     applyCalls = [];
     // A hub-dispatched handler must never call process.exit. Mock it to throw a
     // sentinel so the test can observe an illegal exit instead of killing the runner.
-    mock.method(process, 'exit', (code) => {
+    hookMocks.push(mockRaw(process, 'exit', (code) => {
       exitCalls.push(code);
       throw new Error('UNEXPECTED_PROCESS_EXIT');
-    });
+    }));
     // Stub the migration so the supported-convention path is observable without a real project.
-    mock.method(roadmapUpgrade, 'computeMigrationPlan', () => ({ phases: [] }));
-    mock.method(roadmapUpgrade, 'applyMigration', (_cwd, _plan, opts) => {
+    hookMocks.push(mockRaw(roadmapUpgrade, 'computeMigrationPlan', () => ({ phases: [] })));
+    hookMocks.push(mockRaw(roadmapUpgrade, 'applyMigration', (_cwd, _plan, opts) => {
       applyCalls.push({ opts });
-    });
+    }));
   });
 
   afterEach(() => {
-    mock.restoreAll();
+    for (const m of hookMocks.splice(0)) m.mock.restore();
   });
 
   function runUpgrade(args) {

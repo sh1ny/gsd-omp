@@ -11,7 +11,7 @@
  */
 
 const test = require('node:test');
-const { mock } = require('node:test');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -1215,8 +1215,8 @@ test('remove: ledger commit failure after files are deleted returns blocked (fin
   assert.ok(ledgerMod.readLedger(dir)?.entries['e'], 'e must be installed');
 
   // Mock renameSync to fail (ledger write = tmp+rename; make the rename fail).
-  const { mock } = require('node:test');
-  const renameMock = mock.method(require('node:fs'), 'renameSync', (_src, _dest) => {
+  
+  const renameMock = mockMethod(t, require('node:fs'), 'renameSync', (_src, _dest) => {
     const err = new Error('EXDEV: cross-device rename not permitted');
     err.code = 'EXDEV';
     throw err;
@@ -1252,8 +1252,8 @@ test('upgrade: intent recordInstall failure returns blocked (finding-4)', async 
   });
 
   // Mock renameSync to fail (writeLedger uses tmp+rename; the intent write will fail).
-  const { mock } = require('node:test');
-  const renameMock = mock.method(require('node:fs'), 'renameSync', (_src, _dest) => {
+  
+  const renameMock = mockMethod(t, require('node:fs'), 'renameSync', (_src, _dest) => {
     const err = new Error('EXDEV: cross-device rename not permitted');
     err.code = 'EXDEV';
     throw err;
@@ -1318,9 +1318,9 @@ test('remove: finding-3 — removeCapability NEVER calls ledgerMod.removeEntry (
   // Spy on ledgerMod.removeEntry — removeCapability must NEVER call it.
   // (removeCapability commits by mutating the in-memory ledger + writeLedger directly,
   // never via removeEntry whose re-read is non-strict and would silently swallow corruption.)
-  const { mock } = require('node:test');
+  
   let removeEntryCalls = 0;
-  const removeEntryMock = mock.method(ledgerMod, 'removeEntry', function (...args) {
+  const removeEntryMock = mockMethod(t, ledgerMod, 'removeEntry', function (...args) {
     removeEntryCalls++;
     // Still call through so ledger stays consistent if the code ever uses it.
     return ledgerMod.removeEntry.__origFn ? ledgerMod.removeEntry.__origFn(...args) : undefined;
@@ -1348,10 +1348,10 @@ test('remove: finding-3 — mid-remove corruption blocks coherently: capability 
   // After strict pre-read, corrupt the ledger on disk so the writeLedger commit fails.
   // We do this by intercepting the SECOND renameSync call (the atomic ledger write's rename)
   // with an EXDEV error, simulating a commit failure after files are already deleted.
-  const { mock } = require('node:test');
+  
   const realRename = fs.renameSync.bind(fs);
   let renameCount = 0;
-  const renameMock = mock.method(fs, 'renameSync', function (src, dst) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dst) {
     renameCount++;
     // The first rename may be for staging during install setup; skip it.
     // The ledger commit rename will be for a .tmp.<pid>-<nonce> → .gsd-capabilities.json path.
@@ -1647,9 +1647,9 @@ test('fix-5: removeCapability commit-fail guidance does not reference nonexisten
   });
 
   // Simulate commit failure by making the ledger write's renameSync throw.
-  const { mock } = require('node:test');
+  
   const realRename = fs.renameSync.bind(fs);
-  const renameMock = mock.method(fs, 'renameSync', function (src, dst) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dst) {
     if (typeof dst === 'string' && dst.includes('.gsd-capabilities.json')) {
       const err = new Error('EXDEV: cross-device link not permitted');
       err.code = 'EXDEV';
@@ -1987,7 +1987,7 @@ test('finding-1: a legacy/no-`ts` body falls back to mtime age (stale past deadm
 // body untouched).
 test('finding-1: an inode change between the steal-decision and the rename causes a RETRY, not a steal', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   withLockProbes(t, { alive: false, startTime: 'START-A' }); // dead pid → otherwise steal-eligible
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
@@ -1999,7 +1999,7 @@ test('finding-1: an inode change between the steal-decision and the rename cause
 
   // openSync('wx') always reports the lock held; renameSync would (without the recheck) "succeed".
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock') && flags === 'wx') {
       const err = new Error('EEXIST'); err.code = 'EEXIST'; throw err;
     }
@@ -2009,7 +2009,7 @@ test('finding-1: an inode change between the steal-decision and the rename cause
   // ino=2 (B swapped the inode). Every recheck therefore observes a changed inode → A must retry.
   let statCalls = 0;
   const realStat = fs.statSync.bind(fs);
-  const statMock = mock.method(fs, 'statSync', function (p, ...rest) {
+  const statMock = mockMethod(t, fs, 'statSync', function (p, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock')) {
       statCalls += 1;
       const ino = (statCalls % 2 === 1) ? 1 : 2; // decision: 1, recheck: 2 (changed)
@@ -2019,7 +2019,7 @@ test('finding-1: an inode change between the steal-decision and the rename cause
   });
   // If the recheck were absent, rename would fire and steal; track whether it was ever called on .lock.
   let renamedLock = false;
-  const renameMock = mock.method(fs, 'renameSync', function (from, ...rest) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (from, ...rest) {
     if (typeof from === 'string' && from.endsWith('.lock')) { renamedLock = true; return; }
     return require('node:fs').renameSync.wrappedMethod
       ? require('node:fs').renameSync.wrappedMethod(from, ...rest)
@@ -2039,7 +2039,7 @@ test('finding-1: an inode change between the steal-decision and the rename cause
 // RECHECK read sees a NEW ts → A must NOT steal.
 test('finding-1: a body `ts` change between the steal-decision and the rename causes a RETRY, not a steal', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   withLockProbes(t, { alive: false, startTime: 'START-A' }); // dead pid → steal-eligible if stale
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
@@ -2053,7 +2053,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
   // throws EEXIST (held); an O_RDONLY|O_NONBLOCK read open returns the real fd and is registered.
   const lockFds = new Set();
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock') && flags === 'wx') {
       const err = new Error('EEXIST'); err.code = 'EEXIST'; throw err;
     }
@@ -2063,7 +2063,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
   });
   // Same dev/ino across stats (so the body TS — not the inode — is the discriminator under test).
   const realStat = fs.statSync.bind(fs);
-  const statMock = mock.method(fs, 'statSync', function (p, ...rest) {
+  const statMock = mockMethod(t, fs, 'statSync', function (p, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock')) {
       return { mtimeMs: oldTs, dev: 7, ino: 7, size: oldBody.length, isFile: () => true };
     }
@@ -2075,7 +2075,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
   const realFstat = fs.fstatSync.bind(fs);
   let bodyReads = 0;
   let activeBody = oldBody;
-  const fstatMock = mock.method(fs, 'fstatSync', function (fd, ...rest) {
+  const fstatMock = mockMethod(t, fs, 'fstatSync', function (fd, ...rest) {
     if (lockFds.has(fd)) {
       bodyReads += 1;
       activeBody = bodyReads === 1 ? oldBody : newBody; // decision: old, recheck(s): new
@@ -2084,7 +2084,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
     return realFstat(fd, ...rest);
   });
   const realReadSync = fs.readSync.bind(fs);
-  const readMock = mock.method(fs, 'readSync', function (fd, buffer, offset, length, position, ...rest) {
+  const readMock = mockMethod(t, fs, 'readSync', function (fd, buffer, offset, length, position, ...rest) {
     if (lockFds.has(fd)) {
       const bytes = Buffer.from(activeBody, 'utf8');
       const n = Math.min(length, bytes.length - (position || 0));
@@ -2095,7 +2095,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
     return realReadSync(fd, buffer, offset, length, position, ...rest);
   });
   let renamedLock = false;
-  const renameMock = mock.method(fs, 'renameSync', function (from) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (from) {
     if (typeof from === 'string' && from.endsWith('.lock')) { renamedLock = true; return; }
     return undefined;
   });
@@ -2117,7 +2117,7 @@ test('finding-1: a body `ts` change between the steal-decision and the rename ca
 // strictEqual(null)/renamedLock===false pair fails.
 test('finding-3: a body `ts` going NULL between the steal-decision and the rename causes a RETRY, not a steal', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   withLockProbes(t, { alive: false, startTime: 'START-A' }); // dead pid → steal-eligible if stale
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
@@ -2130,7 +2130,7 @@ test('finding-3: a body `ts` going NULL between the steal-decision and the renam
 
   const lockFds = new Set();
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock') && flags === 'wx') {
       const err = new Error('EEXIST'); err.code = 'EEXIST'; throw err;
     }
@@ -2140,7 +2140,7 @@ test('finding-3: a body `ts` going NULL between the steal-decision and the renam
   });
   // Same dev/ino across stats (so the body ts disappearing — not the inode — is the discriminator).
   const realStat = fs.statSync.bind(fs);
-  const statMock = mock.method(fs, 'statSync', function (p, ...rest) {
+  const statMock = mockMethod(t, fs, 'statSync', function (p, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock')) {
       return { mtimeMs: oldTs, dev: 9, ino: 9, size: oldBody.length, isFile: () => true };
     }
@@ -2151,7 +2151,7 @@ test('finding-3: a body `ts` going NULL between the steal-decision and the renam
   const realFstat = fs.fstatSync.bind(fs);
   let bodyReads = 0;
   let activeBody = oldBody;
-  const fstatMock = mock.method(fs, 'fstatSync', function (fd, ...rest) {
+  const fstatMock = mockMethod(t, fs, 'fstatSync', function (fd, ...rest) {
     if (lockFds.has(fd)) {
       bodyReads += 1;
       activeBody = bodyReads === 1 ? oldBody : recheckBody; // decision: has-ts, recheck(s): no-ts
@@ -2160,7 +2160,7 @@ test('finding-3: a body `ts` going NULL between the steal-decision and the renam
     return realFstat(fd, ...rest);
   });
   const realReadSync = fs.readSync.bind(fs);
-  const readMock = mock.method(fs, 'readSync', function (fd, buffer, offset, length, position, ...rest) {
+  const readMock = mockMethod(t, fs, 'readSync', function (fd, buffer, offset, length, position, ...rest) {
     if (lockFds.has(fd)) {
       const bytes = Buffer.from(activeBody, 'utf8');
       const n = Math.min(length, bytes.length - (position || 0));
@@ -2171,7 +2171,7 @@ test('finding-3: a body `ts` going NULL between the steal-decision and the renam
     return realReadSync(fd, buffer, offset, length, position, ...rest);
   });
   let renamedLock = false;
-  const renameMock = mock.method(fs, 'renameSync', function (from) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (from) {
     if (typeof from === 'string' && from.endsWith('.lock')) { renamedLock = true; return; }
     return undefined;
   });
@@ -2223,7 +2223,7 @@ test('finding-2: a FIFO lock body does NOT hang acquireLock — treated as unpar
 
 test('finding-3/2: a body-write (writeFileSync) failure after the exclusive create leaves NO orphan .lock behind', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
 
@@ -2231,7 +2231,7 @@ test('finding-3/2: a body-write (writeFileSync) failure after the exclusive crea
   // be written via writeFileSync (finding 2), so mocking writeFileSync to throw is what trips it; if
   // the code used a bare writeSync this would never fire (proving writeFileSync is the write path).
   let writeFileFired = false;
-  const writeFileMock = mock.method(fs, 'writeFileSync', function (fd) {
+  const writeFileMock = mockMethod(t, fs, 'writeFileSync', function (fd) {
     // Only fail the fd-targeted lock body write (a numeric fd), not any path-based writes.
     if (typeof fd === 'number') {
       writeFileFired = true;
@@ -2255,7 +2255,7 @@ test('finding-3/2: a body-write (writeFileSync) failure after the exclusive crea
 // failed close is left behind and this "no .lock left behind" assertion fails.
 test('finding-3: a closeSync failure after the exclusive create+write leaves NO orphan .lock behind', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
 
@@ -2263,13 +2263,13 @@ test('finding-3: a closeSync failure after the exclusive create+write leaves NO 
   // Track which fds belong to the .lock so unrelated closeSync calls (dir fsync, etc.) are untouched.
   const realOpen = fs.openSync.bind(fs);
   const lockFds = new Set();
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (typeof p === 'string' && p.endsWith('.lock') && flags === 'wx') lockFds.add(fd);
     return fd;
   });
   const realClose = fs.closeSync.bind(fs);
-  const closeMock = mock.method(fs, 'closeSync', function (fd, ...rest) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd, ...rest) {
     if (lockFds.has(fd)) {
       lockFds.delete(fd);
       const err = new Error('EIO: delayed-writeback failure on close'); err.code = 'EIO'; throw err;
@@ -2385,7 +2385,7 @@ test('finding-4: releaseLock STILL deletes our own unchanged lock (inode guard i
 
 test('CONC-2: acquireLock returns null on contention exhaustion WITHOUT a stack overflow (bounded loop)', (t) => {
   const dir = runtime();
-  const { mock } = require('node:test');
+  
   const lockPath = path.join(dir, '.gsd', 'capabilities', '.lock');
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
 
@@ -2400,7 +2400,7 @@ test('CONC-2: acquireLock returns null on contention exhaustion WITHOUT a stack 
   // other open — including the fd reader's O_RDONLY open of the lock body — delegates to the real fn so
   // the JSON body is genuinely read. TV-06: capture the real fn BEFORE mocking and delegate in else.
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock') && flags === 'wx') {
       const err = new Error('EEXIST: file already exists'); err.code = 'EEXIST'; throw err;
     }
@@ -2411,7 +2411,7 @@ test('CONC-2: acquireLock returns null on contention exhaustion WITHOUT a stack 
   // TV-11: include `size` (and dev/ino) so a stat consumer that reads them gets a complete stat object.
   const realStat = fs.statSync.bind(fs);
   const staleMtime = Date.now() - 10 * 60 * 1000;
-  const statMock = mock.method(fs, 'statSync', function (p, ...rest) {
+  const statMock = mockMethod(t, fs, 'statSync', function (p, ...rest) {
     if (typeof p === 'string' && p.endsWith('.lock')) {
       return { mtimeMs: staleMtime, size: 256, dev: 1, ino: 1, isFile: () => true, isDirectory: () => false };
     }
@@ -2422,8 +2422,8 @@ test('CONC-2: acquireLock returns null on contention exhaustion WITHOUT a stack 
   // never actually acquire → the bounded loop runs to exhaustion and returns null (no recursion/SO).
   const realRename = fs.renameSync.bind(fs);
   const realRm = fs.rmSync.bind(fs);
-  const renameMock = mock.method(fs, 'renameSync', function (src, dst, ...rest) { return realRename(src, dst, ...rest); });
-  const rmMock = mock.method(fs, 'rmSync', function (p, ...rest) { return realRm(p, ...rest); });
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dst, ...rest) { return realRename(src, dst, ...rest); });
+  const rmMock = mockMethod(t, fs, 'rmSync', function (p, ...rest) { return realRm(p, ...rest); });
   t.after(() => { openMock.mock.restore(); statMock.mock.restore(); renameMock.mock.restore(); rmMock.mock.restore(); });
 
   let handle;
@@ -2517,10 +2517,10 @@ test('CONC-3: upgrade backupName includes a random nonce (collision-resistant ac
 
   // Capture the backupName the upgrade records into the _pending intent by spying on
   // ledgerMod.recordInstall and reading the _pending.backupName.
-  const { mock } = require('node:test');
+  
   const capturedBackupNames = [];
   const realRecord = ledgerMod.recordInstall.bind(ledgerMod);
-  const recordMock = mock.method(ledgerMod, 'recordInstall', function (rd, entry) {
+  const recordMock = mockMethod(t, ledgerMod, 'recordInstall', function (rd, entry) {
     if (entry && entry._pending && typeof entry._pending.backupName === 'string') {
       capturedBackupNames.push(entry._pending.backupName);
     }
@@ -2571,22 +2571,22 @@ test('DUR-3: promoteStagingToFinal fsyncs the parent directory after BOTH rename
   });
 
   const capsRoot = path.join(dir, '.gsd', 'capabilities');
-  const { mock } = require('node:test');
+  
   const realOpen = fs.openSync.bind(fs);
   const realFsync = fs.fsyncSync.bind(fs);
   const realClose = fs.closeSync.bind(fs);
   const dirFds = new Set();
   let parentDirFsyncs = 0;
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (typeof p === 'string' && path.resolve(p) === path.resolve(capsRoot) && flags === 'r') dirFds.add(fd);
     return fd;
   });
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd, ...rest) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd, ...rest) {
     if (dirFds.has(fd)) parentDirFsyncs++;
     return realFsync(fd, ...rest);
   });
-  const closeMock = mock.method(fs, 'closeSync', function (fd, ...rest) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd, ...rest) {
     // Drop the fd from the tracked set BEFORE closing: a reused fd number for a later non-capsRoot
     // open must not be counted as a capsRoot dir fsync.
     if (dirFds.has(fd)) dirFds.delete(fd);
@@ -2616,13 +2616,13 @@ function withLifecycleDirFsyncError(t, capsRoot, errno) {
   const dirFds = new Set();
   const closed = [];
   const realOpen = fs.openSync.bind(fs);
-  const openMock = mock.method(fs, 'openSync', function (p, flags, ...rest) {
+  const openMock = mockMethod(t, fs, 'openSync', function (p, flags, ...rest) {
     const fd = realOpen(p, flags, ...rest);
     if (typeof p === 'string' && path.resolve(p) === path.resolve(capsRoot) && flags === 'r') dirFds.add(fd);
     return fd;
   });
   const realClose = fs.closeSync.bind(fs);
-  const closeMock = mock.method(fs, 'closeSync', function (fd) {
+  const closeMock = mockMethod(t, fs, 'closeSync', function (fd) {
     // Remove the fd from the tracked set BEFORE closing: once closed the OS may reuse the same
     // fd NUMBER for an unrelated open (e.g. writeLedger's temp file), which must NOT be treated
     // as the capabilities-root dir fd.
@@ -2630,7 +2630,7 @@ function withLifecycleDirFsyncError(t, capsRoot, errno) {
     return realClose(fd);
   });
   const realFsync = fs.fsyncSync.bind(fs);
-  const fsyncMock = mock.method(fs, 'fsyncSync', function (fd) {
+  const fsyncMock = mockMethod(t, fs, 'fsyncSync', function (fd) {
     if (dirFds.has(fd)) { const e = new Error(`${errno}: injected`); e.code = errno; throw e; }
     return realFsync(fd);
   });
@@ -2698,13 +2698,13 @@ test('DUR-6: reconcile upgrade-rollback renames backup→final atomically (no rm
   // Spy: assert reconcile NEVER rmSyncs the finalDir before the backup rename. If the buggy
   // order is restored, finalDir is rmSync'd first; the new order must rename the backup over
   // finalDir directly (renameSync replaces atomically), so no rmSync of finalDir occurs.
-  const { mock } = require('node:test');
+  
   const finalDir = path.join(dir, '.gsd', 'capabilities', 'c');
   const realRm = fs.rmSync.bind(fs);
   const realRename = fs.renameSync.bind(fs); // capture BEFORE mocking
   let finalDirRmBeforeRename = false;
   let backupRenamedToFinal = false;
-  const renameMock = mock.method(fs, 'renameSync', function (src, dst, ...rest) {
+  const renameMock = mockMethod(t, fs, 'renameSync', function (src, dst, ...rest) {
     if (typeof src === 'string' && typeof dst === 'string'
       && path.resolve(src) === path.resolve(path.join(dir, '.gsd', 'capabilities', backupName))
       && path.resolve(dst) === path.resolve(finalDir)) {
@@ -2712,7 +2712,7 @@ test('DUR-6: reconcile upgrade-rollback renames backup→final atomically (no rm
     }
     return realRename(src, dst, ...rest);
   });
-  const rmMock = mock.method(fs, 'rmSync', function (p, ...rest) {
+  const rmMock = mockMethod(t, fs, 'rmSync', function (p, ...rest) {
     if (typeof p === 'string' && path.resolve(p) === path.resolve(finalDir) && !backupRenamedToFinal) {
       finalDirRmBeforeRename = true;
     }
@@ -2748,10 +2748,10 @@ test('DOS-2: reconcile with N pending entries writes the ledger at most once for
     // Do NOT create the on-disk dir → safeRmUnder returns true (already gone) → entry rolled back.
   }
 
-  const { mock } = require('node:test');
+  
   let ledgerWrites = 0;
   const realWrite = ledgerMod.writeLedger.bind(ledgerMod);
-  const writeMock = mock.method(ledgerMod, 'writeLedger', function (rd, ledger) {
+  const writeMock = mockMethod(t, ledgerMod, 'writeLedger', function (rd, ledger) {
     ledgerWrites++;
     return realWrite(rd, ledger);
   });
@@ -2761,7 +2761,7 @@ test('DOS-2: reconcile with N pending entries writes the ledger at most once for
   // removeEntry: a call here would be the bug under test (a per-entry write), so we only record that it
   // happened (the count assertion below fails) rather than masking it behind a misleading call-through.
   let removeEntryCalls = 0;
-  const removeMock = mock.method(ledgerMod, 'removeEntry', function () {
+  const removeMock = mockMethod(t, ledgerMod, 'removeEntry', function () {
     removeEntryCalls++;
     return false; // not delegated on purpose — see TV-10 note above.
   });
@@ -2799,12 +2799,12 @@ test('W-6: a throwing per-entry mutation does not abort reconcile (warns and con
   recordPending(dir, 'bad-cap', '1.0.0', { kind: 'upgrade', backupName: badBackup, sharedFiles: [] });
   recordPending(dir, 'good-cap', '1.0.0', { kind: 'install', backupName: null, sharedFiles: [] });
 
-  const { mock } = require('node:test');
+  
   const realExists = fs.existsSync.bind(fs);
   const badBackupPath = path.join(dir, '.gsd', 'capabilities', badBackup);
   // existsSync(backupDir) is a direct per-entry call in reconcile's step-1 loop (outside the inner
   // restore try/catch) — making it throw for bad-cap exercises the W-6 per-entry catch.
-  const existsMock = mock.method(fs, 'existsSync', function (p) {
+  const existsMock = mockMethod(t, fs, 'existsSync', function (p) {
     if (typeof p === 'string' && path.resolve(p) === path.resolve(badBackupPath)) {
       throw new Error('simulated per-entry IO failure for bad-cap');
     }
@@ -3188,14 +3188,14 @@ test('IC-07: project-scope install WITHOUT a consentStoreDir warns on stderr (co
 // successful install — surface a non-fatal warning naming the store path and let the install succeed.
 // ---------------------------------------------------------------------------
 
-test('IC-05/WIN-2: a consent-store write failure leaves the install status:installed + warns', async () => {
+test('IC-05/WIN-2: a consent-store write failure leaves the install status:installed + warns', async (t) => {
   // revert-fails: if bindProjectConsent re-threw (or the warning were dropped), the install would
   // either throw / return non-installed OR succeed silently — both fail an assertion below.
   const dir = fs.realpathSync(runtime());
   const home = consentHome();
   // Simulate an unwritable store: mock recordProjectConsent to throw (read-only/UNC/NFS surrogate).
   const realRecord = consentMod.recordProjectConsent.bind(consentMod);
-  const recMock = mock.method(consentMod, 'recordProjectConsent', function () {
+  const recMock = mockMethod(t, consentMod, 'recordProjectConsent', function () {
     const err = new Error('EROFS: read-only file system, open consent.json'); err.code = 'EROFS'; throw err;
   });
   const orig = process.stderr.write.bind(process.stderr);

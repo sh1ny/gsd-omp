@@ -1553,8 +1553,9 @@ test('reconciles a drifted applied-migration checksum into install state on appl
 
 'use strict';
 
-const { test, mock } = require('node:test');
+const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -1777,8 +1778,6 @@ test('T5: unreclaimable same-PID lock throws bounded error (reclaim-unlink failu
   const originalUnlinkSync = fs.unlinkSync;
 
   t.after(() => {
-    mock.restoreAll();
-    fs.unlinkSync = originalUnlinkSync;
     cleanup(configDir);
   });
 
@@ -1792,7 +1791,7 @@ test('T5: unreclaimable same-PID lock throws bounded error (reclaim-unlink failu
   //   the timeout check → throws "installer migration lock is held" after ≤200ms.
   // Without the fix (original code): unlink throws but continue runs anyway →
   //   spins indefinitely, never reaches the timeout check → deadlock.
-  mock.method(fs, 'unlinkSync', function faultInjectUnlinkSync(targetPath) {
+  mockMethod(t, fs, 'unlinkSync', function faultInjectUnlinkSync(targetPath) {
     const isLock = path.basename(String(targetPath)) === INSTALL_MIGRATION_LOCK_NAME;
     if (isLock) {
       const err = Object.assign(

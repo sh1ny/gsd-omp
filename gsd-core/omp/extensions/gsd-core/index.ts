@@ -1,9 +1,12 @@
-'use strict';
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
+const require = createRequire(import.meta.url);
 
 const PROMPT_INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+instructions/i,
@@ -35,7 +38,7 @@ const MARKDOWN_LINK_PATTERNS = [
   {
     pattern: /\]\(\s*data:/i,
     ruleId: 'MD-LINK-DATA-SCHEME',
-    safePredicate: (line) => {
+    safePredicate: (line: any) => {
       const match = line.match(/\]\(\s*(data:[^)]*)/i);
       return Boolean(match && DATA_URI_SAFE_MIME_RE.test(match[1]));
     },
@@ -48,20 +51,20 @@ const ALL_READ_PATTERNS = [...PROMPT_INJECTION_PATTERNS, ...SUMMARISATION_PATTER
 const MAX_QUEUED_CONTEXT = 50;
 const DEBOUNCE_CALLS = 5;
 const UPDATE_RATE_LIMIT_SECONDS = 24 * 60 * 60;
-const queuedContext = [];
-let configWatchers = [];
-const contextWarningState = { callsSinceWarn: 0, lastLevel: null, criticalRecorded: false };
+const queuedContext: string[] = [];
+let configWatchers: any[] = [];
+const contextWarningState: { callsSinceWarn: number; lastLevel: 'warning' | 'critical' | null; criticalRecorded: boolean } = { callsSinceWarn: 0, lastLevel: null, criticalRecorded: false };
 
 // --- Status widget (right-aligned above-editor band) ---
 const STATUS_WIDGET_KEY = 'gsd-status';
-let statusComponent = null;
-let statusComponentUi = null;
+let statusComponent: any = null;
+let statusComponentUi: any = null;
 
-function stripAnsi(str) {
+function stripAnsi(str: any) {
   return String(str).replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-function visibleWidthApprox(str) {
+function visibleWidthApprox(str: any) {
   const s = stripAnsi(str);
   let width = 0;
   for (const ch of s) {
@@ -95,14 +98,14 @@ function visibleWidthApprox(str) {
   return width;
 }
 
-function themeSymbol(theme, key, fallback) {
+function themeSymbol(theme: any, key: any, fallback: any) {
   try {
     const s = theme && typeof theme.symbol === 'function' ? theme.symbol(key) : undefined;
     return s || fallback;
   } catch { return fallback; }
 }
 
-function themeFg(theme, color, text) {
+function themeFg(theme: any, color: any, text: any) {
   try {
     return theme && typeof theme.fg === 'function' ? theme.fg(color, text) : text;
   } catch { return text; }
@@ -116,13 +119,13 @@ function resetSessionState() {
 }
 
 const SENSITIVE_CONFIG_KEY_RE = /(?:token|secret|password|passwd|api[_-]?key|apikey|credential|private[_-]?key)/i;
-function redactConfigValue(key, value) {
+function redactConfigValue(key: any, value: any) {
   return SENSITIVE_CONFIG_KEY_RE.test(String(key)) ? '[REDACTED]' : value;
 }
 let updateCheckSpawned = false;
-let configReloadTimer = null;
+let configReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
-function gsdCoreOmpExtension(pi) {
+export default function gsdCoreOmpExtension(pi: ExtensionAPI) {
   pi.setLabel('GSD Core');
   pi.on('session_start', onSessionStart);
   pi.on('tool_call', onToolCall);
@@ -132,32 +135,20 @@ function gsdCoreOmpExtension(pi) {
   pi.on('session_shutdown', onSessionShutdown);
 }
 
-function toClaudeToolName(toolName) {
-  const value = String(toolName || '');
-  const map = new Map([
-    ['bash', 'Bash'],
-    ['read', 'Read'],
-    ['write', 'Write'],
-    ['edit', 'Edit'],
-    ['task', 'Task'],
-  ]);
-  return map.get(value.toLowerCase()) || value;
-}
-
-function toolNameOf(event) {
+function toolNameOf(event: any) {
   return String(event && (event.toolName || event.tool_name || event.name || '') || '').toLowerCase();
 }
 
-function isUrlLike(value) {
+function isUrlLike(value: any) {
   return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(String(value || ''));
 }
 
-function stripReadSelector(pathValue) {
+function stripReadSelector(pathValue: any) {
   if (typeof pathValue !== 'string' || pathValue === '' || isUrlLike(pathValue)) return pathValue || '';
   return pathValue.replace(/(?::(?:raw|conflicts|\d+(?:[-+]\d+)?(?:,\d+(?:[-+]\d+)?)*))+$/i, '');
 }
 
-function extractToolFilePath(event) {
+function extractToolFilePath(event: any) {
   const input = (event && event.input) || {};
   const toolName = toolNameOf(event);
   if (toolName === 'write') return String(input.path || input.file_path || '');
@@ -179,7 +170,7 @@ function extractToolFilePath(event) {
   return '';
 }
 
-function extractToolContent(event) {
+function extractToolContent(event: any) {
   const input = (event && event.input) || {};
   const toolName = toolNameOf(event);
   if (toolName === 'write') return String(input.content || '');
@@ -187,7 +178,7 @@ function extractToolContent(event) {
   return '';
 }
 
-function readPlanningConfig(cwd) {
+function readPlanningConfig(cwd: any) {
   try {
     const configPath = path.join(cwd || process.cwd(), '.planning', 'config.json');
     return JSON.parse(fs.readFileSync(configPath, 'utf8')) || {};
@@ -197,7 +188,7 @@ function readPlanningConfig(cwd) {
 }
 
 function extensionDir() {
-  return __dirname;
+  return path.dirname(fileURLToPath(import.meta.url));
 }
 
 function configDirFromExtension() {
@@ -208,7 +199,7 @@ function gsdCoreDirFromExtension() {
   return path.join(configDirFromExtension(), 'gsd-core');
 }
 
-function requireInstalled(relativeParts) {
+function requireInstalled(relativeParts: any) {
   const installed = path.join(gsdCoreDirFromExtension(), ...relativeParts);
   try { return require(installed); } catch {}
   const source = path.join(extensionDir(), '..', '..', '..', ...relativeParts);
@@ -223,13 +214,13 @@ function packageIdentity() {
   }
 }
 
-function enqueueAdditionalContext(text) {
+function enqueueAdditionalContext(text: any) {
   if (typeof text !== 'string' || text.trim() === '') return;
   queuedContext.push(text);
   while (queuedContext.length > MAX_QUEUED_CONTEXT) queuedContext.shift();
 }
 
-function onContext(event) {
+function onContext(event: any) {
   if (queuedContext.length === 0) return undefined;
   const text = queuedContext.splice(0).join('\n\n');
   return {
@@ -240,7 +231,7 @@ function onContext(event) {
   };
 }
 
-function onSessionStart(event, ctx = {}) {
+function onSessionStart(event: any, ctx: any = {}) {
   resetSessionState();
   queueSessionStateReminder(ctx.cwd || process.cwd());
   queueUpdateBannerAndSpawnWorker();
@@ -248,7 +239,7 @@ function onSessionStart(event, ctx = {}) {
   refreshStatus(ctx);
 }
 
-function onToolCall(event, ctx = {}) {
+function onToolCall(event: any, ctx: any = {}) {
   try { queuePromptInjectionWarning(event); } catch {}
   try { queueReadBeforeEditReminder(event); } catch {}
   try {
@@ -267,7 +258,7 @@ function onToolCall(event, ctx = {}) {
   return undefined;
 }
 
-function onToolResult(event, ctx = {}) {
+function onToolResult(event: any, ctx: any = {}) {
   try { queueReadInjectionWarning(event); } catch {}
   try { queuePhaseBoundaryReminder(event, ctx.cwd || process.cwd()); } catch {}
   try { maybeQueueContextWarning(ctx.cwd || process.cwd(), ctx); } catch {}
@@ -276,12 +267,12 @@ function onToolResult(event, ctx = {}) {
   return undefined;
 }
 
-function onTurnEnd(_event, ctx = {}) {
+function onTurnEnd(_event: any, ctx: any = {}) {
   try { maybeQueueContextWarning(ctx.cwd || process.cwd(), ctx); } catch {}
   try { refreshStatus(ctx); } catch {}
 }
 
-function onSessionShutdown(_event, ctx = {}) {
+function onSessionShutdown(_event: any, ctx: any = {}) {
   for (const watcher of configWatchers) {
     try { watcher.close(); } catch {}
   }
@@ -298,7 +289,7 @@ function onSessionShutdown(_event, ctx = {}) {
   statusComponentUi = null;
 }
 
-function queuePromptInjectionWarning(event) {
+function queuePromptInjectionWarning(event: any) {
   const toolName = toolNameOf(event);
   if (toolName !== 'write' && toolName !== 'edit') return;
   const filePath = extractToolFilePath(event);
@@ -320,7 +311,7 @@ function queuePromptInjectionWarning(event) {
   );
 }
 
-function queueReadBeforeEditReminder(event) {
+function queueReadBeforeEditReminder(event: any) {
   const toolName = toolNameOf(event);
   if (toolName !== 'write' && toolName !== 'edit') return;
   const filePath = extractToolFilePath(event);
@@ -334,11 +325,11 @@ function queueReadBeforeEditReminder(event) {
   );
 }
 
-function git(args, cwd) {
+function git(args: any, cwd: any) {
   return spawnSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000, windowsHide: true });
 }
 
-function nearestExistingDir(start) {
+function nearestExistingDir(start: any) {
   let dir = start;
   let prev;
   do {
@@ -349,7 +340,7 @@ function nearestExistingDir(start) {
   return null;
 }
 
-function worktreePathGuard(event, cwd) {
+function worktreePathGuard(event: any, cwd: any) {
   const toolName = toolNameOf(event);
   if (toolName !== 'write' && toolName !== 'edit') return null;
   const gitDirResult = git(['rev-parse', '--git-dir'], cwd);
@@ -393,7 +384,7 @@ function worktreePathGuard(event, cwd) {
   };
 }
 
-function isExcludedReadPath(filePath) {
+function isExcludedReadPath(filePath: any) {
   const p = String(filePath || '').replace(/\\/g, '/');
   return (
     p.includes('/.planning/') ||
@@ -407,10 +398,10 @@ function isExcludedReadPath(filePath) {
   );
 }
 
-function toolResultText(event) {
+function toolResultText(event: any) {
   const content = event && event.content;
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map((block) => {
+  if (Array.isArray(content)) return content.map((block: any) => {
     if (typeof block === 'string') return block;
     if (block && typeof block.text === 'string') return block.text;
     return '';
@@ -419,7 +410,7 @@ function toolResultText(event) {
   return '';
 }
 
-function queueReadInjectionWarning(event) {
+function queueReadInjectionWarning(event: any) {
   if (toolNameOf(event) !== 'read') return;
   const filePath = extractToolFilePath(event);
   if (!filePath || isExcludedReadPath(filePath)) return;
@@ -452,7 +443,7 @@ function queueReadInjectionWarning(event) {
   );
 }
 
-function maybeQueueContextWarning(cwd, ctx) {
+function maybeQueueContextWarning(cwd: any, ctx: any) {
   const config = readPlanningConfig(cwd);
   if (config.hooks && config.hooks.context_warnings === false) return;
   const usage = ctx && typeof ctx.getContextUsage === 'function' ? ctx.getContextUsage() : null;
@@ -484,7 +475,7 @@ function maybeQueueContextWarning(cwd, ctx) {
   enqueueAdditionalContext(message);
 }
 
-function recordContextCritical(cwd, usedPct) {
+function recordContextCritical(cwd: any, usedPct: any) {
   try {
     const nodeExe = process.env.GSD_NODE || process.env.NODE || 'node';
     const gsdTools = path.join(gsdCoreDirFromExtension(), 'bin', 'gsd-tools.cjs');
@@ -499,7 +490,7 @@ function recordContextCritical(cwd, usedPct) {
   } catch {}
 }
 
-function buildUpdateBannerOutput(state, packageName) {
+function buildUpdateBannerOutput(state: any, packageName: any) {
   const { cache, parseError, suppressFailureWarning } = state || {};
   if (parseError) return suppressFailureWarning ? null : 'GSD update check failed.';
   if (!cache) return null;
@@ -508,7 +499,7 @@ function buildUpdateBannerOutput(state, packageName) {
   return `GSD update available: ${cache.installed || 'unknown'} → ${cache.latest || 'unknown'}. Run /gsd:update.`;
 }
 
-function readUpdateCache(cacheFile) {
+function readUpdateCache(cacheFile: any) {
   try {
     if (!fs.existsSync(cacheFile)) return { cache: null, parseError: false };
     return { cache: JSON.parse(fs.readFileSync(cacheFile, 'utf8')), parseError: false };
@@ -517,7 +508,7 @@ function readUpdateCache(cacheFile) {
   }
 }
 
-function shouldSuppressFailureWarning(sentinelFile, nowSeconds) {
+function shouldSuppressFailureWarning(sentinelFile: any, nowSeconds: any) {
   try {
     if (!fs.existsSync(sentinelFile)) return false;
     const last = parseInt(fs.readFileSync(sentinelFile, 'utf8').trim(), 10);
@@ -525,7 +516,7 @@ function shouldSuppressFailureWarning(sentinelFile, nowSeconds) {
   } catch { return false; }
 }
 
-function recordFailureWarning(sentinelFile, nowSeconds) {
+function recordFailureWarning(sentinelFile: any, nowSeconds: any) {
   try {
     fs.mkdirSync(path.dirname(sentinelFile), { recursive: true });
     fs.writeFileSync(sentinelFile, String(nowSeconds));
@@ -563,7 +554,7 @@ function queueUpdateBannerAndSpawnWorker() {
   } catch {}
 }
 
-function readGsdConfig(dir) {
+function readGsdConfig(dir: any) {
   const home = os.homedir();
   let current = dir || process.cwd();
   for (let i = 0; i < 10; i++) {
@@ -578,7 +569,7 @@ function readGsdConfig(dir) {
   return {};
 }
 
-function getConfigValue(cfg, keyPath) {
+function getConfigValue(cfg: any, keyPath: any) {
   if (!cfg || typeof cfg !== 'object') return undefined;
   if (Object.prototype.hasOwnProperty.call(cfg, keyPath)) return cfg[keyPath];
   let cur = cfg;
@@ -589,7 +580,7 @@ function getConfigValue(cfg, keyPath) {
   return cur;
 }
 
-function readGsdState(dir) {
+function readGsdState(dir: any) {
   const home = os.homedir();
   let current = dir || process.cwd();
   for (let i = 0; i < 10; i++) {
@@ -604,8 +595,8 @@ function readGsdState(dir) {
   return null;
 }
 
-function parseStateMd(content) {
-  const state = {};
+function parseStateMd(content: any) {
+  const state: any = {};
   const fmMatch = String(content || '').match(/^---\n([\s\S]*?)\n---/);
   if (fmMatch) {
     const fm = fmMatch[1];
@@ -622,12 +613,12 @@ function parseStateMd(content) {
     }
     const npFlowMatch = fm.match(/^next_phases:\s*\[([^\]]*)\]/m);
     if (npFlowMatch) {
-      const items = npFlowMatch[1].split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+      const items = npFlowMatch[1].split(',').map((s: any) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
       state.nextPhases = items.length > 0 ? items : null;
     } else {
       const npBlockMatch = fm.match(/^next_phases:\s*\n((?:[ \t]*-[ \t]*[^\n]+\n?)*)/m);
       if (npBlockMatch) {
-        const items = npBlockMatch[1].split('\n').map(line => line.match(/^[ \t]*-[ \t]*(.+)$/)).filter(Boolean).map(m => m[1].trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+        const items = npBlockMatch[1].split('\n').map(line => line.match(/^[ \t]*-[ \t]*(.+)$/)).filter(Boolean).map((m: any) => m[1].trim().replace(/^["']|["']$/g, '')).filter(Boolean);
         state.nextPhases = items.length > 0 ? items : null;
       }
     }
@@ -659,14 +650,15 @@ function parseStateMd(content) {
   return state;
 }
 
-function buildStatusModel(ctx) {
+function buildStatusModel(ctx: any) {
   const cwd = (ctx && ctx.cwd) || process.cwd();
   let showUpdate = false;
   try {
     const { updateCacheFileName } = packageIdentity();
     const cacheFile = path.join(os.homedir(), '.cache', 'gsd', updateCacheFileName);
     if (fs.existsSync(cacheFile)) {
-      showUpdate = evaluateUpdateCache(JSON.parse(fs.readFileSync(cacheFile, 'utf8'))).showUpdate;
+      const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+      showUpdate = cache.update_available === true;
     }
   } catch {}
   const state = readGsdState(cwd) || {};
@@ -680,8 +672,8 @@ function buildStatusModel(ctx) {
   return { showUpdate, state, pct };
 }
 
-function formatStatusSegments(model, theme) {
-  const segments = [];
+function formatStatusSegments(model: any, theme: any) {
+  const segments: any[] = [];
   const { showUpdate, state, pct } = model;
   if (showUpdate) {
     const icon = themeSymbol(theme, 'icon.package', '📦');
@@ -733,16 +725,16 @@ function formatStatusSegments(model, theme) {
 
 function createStatusComponent() {
   const component = {
-    tui: null,
-    theme: null,
-    pendingModel: null,
-    segments: [],
+    tui: null as any,
+    theme: null as any,
+    pendingModel: null as any,
+    segments: [] as any[],
     styledLine: '',
     plainWidth: 0,
     cachedWidth: undefined,
-    cachedLines: [],
+    cachedLines: [] as string[],
 
-    setModel(model) {
+    setModel(model: any) {
       this.pendingModel = model;
       this._recompute();
       if (this.tui) {
@@ -754,20 +746,20 @@ function createStatusComponent() {
       if (this.pendingModel == null) return;
       this.segments = formatStatusSegments(this.pendingModel, this.theme);
       const sep = themeFg(this.theme, 'border', ' · ');
-      this.styledLine = this.segments.map(s => s.styled).join(sep);
+      this.styledLine = this.segments.map((s: any) => s.styled).join(sep);
       const sepWidth = 3 * Math.max(0, this.segments.length - 1);
       this.plainWidth = this.segments.reduce((sum, s) => sum + visibleWidthApprox(s.plain), 0) + sepWidth;
       this.cachedWidth = undefined;
     },
 
-    attach(tuiArg, themeArg) {
+    attach(tuiArg: any, themeArg: any) {
       this.tui = tuiArg;
       this.theme = themeArg;
       this._recompute();
       return this;
     },
 
-    render(width) {
+    render(width: any) {
       if (this.segments.length === 0) return [];
       if (this.cachedWidth === width) return this.cachedLines;
       const pad = Math.max(0, width - this.plainWidth);
@@ -789,17 +781,17 @@ function createStatusComponent() {
   return component;
 }
 
-function refreshStatusLegacy(ctx) {
+function refreshStatusLegacy(ctx: any) {
   try {
     if (!ctx || !ctx.ui || typeof ctx.ui.setStatus !== 'function') return;
     const model = buildStatusModel(ctx);
     const segments = formatStatusSegments(model, null);
-    const text = segments.map(s => s.plain).join(' · ') || undefined;
+    const text = segments.map((s: any) => s.plain).join(' · ') || undefined;
     ctx.ui.setStatus('gsd', text);
   } catch {}
 }
 
-function refreshStatus(ctx) {
+function refreshStatus(ctx: any) {
   try {
     if (!ctx || !ctx.ui) return;
     const model = buildStatusModel(ctx);
@@ -818,7 +810,7 @@ function refreshStatus(ctx) {
         const component = createStatusComponent();
         component.setModel(model);
         try {
-          ctx.ui.setWidget(STATUS_WIDGET_KEY, (tui, theme) => component.attach(tui, theme));
+          ctx.ui.setWidget(STATUS_WIDGET_KEY, (tui: any, theme: any) => component.attach(tui, theme));
           statusComponent = component;
           statusComponentUi = ctx.ui;
         } catch {
@@ -835,15 +827,15 @@ function refreshStatus(ctx) {
   refreshStatusLegacy(ctx);
 }
 
-function communityEnabled(cwd) {
+function communityEnabled(cwd: any) {
   return readPlanningConfig(cwd).hooks?.community === true;
 }
 
-function workflowGuardEnabled(cwd) {
+function workflowGuardEnabled(cwd: any) {
   return readPlanningConfig(cwd).hooks?.workflow_guard === true;
 }
 
-function queueSessionStateReminder(cwd) {
+function queueSessionStateReminder(cwd: any) {
   if (!communityEnabled(cwd)) return;
   const statePath = path.join(cwd, '.planning', 'STATE.md');
   const lines = ['## Project State Reminder', ''];
@@ -858,7 +850,7 @@ function queueSessionStateReminder(cwd) {
   enqueueAdditionalContext(lines.join('\n'));
 }
 
-function queuePhaseBoundaryReminder(event, cwd) {
+function queuePhaseBoundaryReminder(event: any, cwd: any) {
   const toolName = toolNameOf(event);
   if (toolName !== 'write' && toolName !== 'edit') return;
   if (!communityEnabled(cwd)) return;
@@ -869,7 +861,7 @@ function queuePhaseBoundaryReminder(event, cwd) {
   enqueueAdditionalContext(`.planning/ file modified: ${filePath}\nCheck: Should STATE.md be updated to reflect this change?`);
 }
 
-function tokenize(cmd) {
+function tokenize(cmd: any) {
   const tokens = [];
   let i = 0;
   const len = String(cmd || '').length;
@@ -899,7 +891,7 @@ function tokenize(cmd) {
 const ARGUMENT_TAKING_FLAGS = new Set(['-C', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--exec-path', '--html-path', '--man-path', '--info-path', '--list-cmds']);
 const BOOLEAN_FLAGS = new Set(['-p', '--paginate', '--no-pager', '--no-replace-objects', '--bare', '--literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs', '--no-optional-locks', '-P', '--no-lazy-fetch', '--version', '--help']);
 
-function isGitSubcommand(cmd, sub) {
+function isGitSubcommand(cmd: any, sub: any) {
   const tokens = tokenize(cmd);
   let i = 0;
   while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
@@ -915,7 +907,7 @@ function isGitSubcommand(cmd, sub) {
   return i < tokens.length && tokens[i] === sub;
 }
 
-function firstCommitMessage(command) {
+function firstCommitMessage(command: any) {
   const tokens = tokenize(command);
   for (let i = 0; i < tokens.length; i++) {
     if (tokens[i] === '-m' && tokens[i + 1]) return tokens[i + 1];
@@ -924,7 +916,7 @@ function firstCommitMessage(command) {
   return '';
 }
 
-function conventionalCommitGuard(event, cwd) {
+function conventionalCommitGuard(event: any, cwd: any) {
   if (toolNameOf(event) !== 'bash' || !communityEnabled(cwd)) return null;
   const command = String(event.input?.command || '');
   if (!isGitSubcommand(command, 'commit')) return null;
@@ -940,7 +932,7 @@ function conventionalCommitGuard(event, cwd) {
   return null;
 }
 
-function forceGitAddCwds(command, defaultCwd) {
+function forceGitAddCwds(command: any, defaultCwd: any) {
   const tokens = tokenize(command || '');
   const separators = new Set(['&&', '||', ';', '|']);
   const cwdList = [];
@@ -965,12 +957,12 @@ function forceGitAddCwds(command, defaultCwd) {
   return cwdList;
 }
 
-function currentBranch(cwd) {
+function currentBranch(cwd: any) {
   const result = spawnSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
   return result.status === 0 ? result.stdout.trim() : '';
 }
 
-function workflowForceAddGuard(event, cwd) {
+function workflowForceAddGuard(event: any, cwd: any) {
   if (toolNameOf(event) !== 'bash' || !workflowGuardEnabled(cwd)) return null;
   const command = String(event.input?.command || '');
   for (const gitCwd of forceGitAddCwds(command, cwd)) {
@@ -981,7 +973,7 @@ function workflowForceAddGuard(event, cwd) {
   return null;
 }
 
-function queueWorkflowEditAdvisory(event, cwd) {
+function queueWorkflowEditAdvisory(event: any, cwd: any) {
   const toolName = toolNameOf(event);
   if (toolName !== 'write' && toolName !== 'edit') return;
   const input = event.input || {};
@@ -1000,12 +992,12 @@ function queueWorkflowEditAdvisory(event, cwd) {
   );
 }
 
-function graphifyEnabled(cwd) {
+function graphifyEnabled(cwd: any) {
   const config = readPlanningConfig(cwd);
   return config.graphify?.enabled === true && config.graphify?.auto_update === true;
 }
 
-function findExecutableOnPath(name) {
+function findExecutableOnPath(name: any) {
   const dirs = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
   const extensions = process.platform === 'win32'
     ? String(process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
@@ -1019,10 +1011,10 @@ function findExecutableOnPath(name) {
   return null;
 }
 
-function maybeTriggerGraphify(event, cwd) {
+function maybeTriggerGraphify(event: any, cwd: any) {
   if (toolNameOf(event) !== 'bash') return;
   const command = String(event.input?.command || '');
-  if (!['git commit', 'git merge', 'git pull', 'git rebase --continue', 'git cherry-pick', 'gsd-tools query commit'].some(s => command.includes(s))) return;
+  if (!['git commit', 'git merge', 'git pull', 'git rebase --continue', 'git cherry-pick', 'gsd-tools query commit'].some((s: any) => command.includes(s))) return;
   if (process.env.CI) return;
   if (!graphifyEnabled(cwd)) return;
   if (git(['rev-parse', '--git-dir'], cwd).status !== 0) return;
@@ -1054,7 +1046,7 @@ function maybeTriggerGraphify(event, cwd) {
   writeGraphifyStatus(statusFile, { ts: new Date().toISOString(), status: 'running', exit_code: null, duration_ms: null, head_at_build: head, graphify_version: null });
   const child = spawn(graphifyPath, ['update', '.'], { cwd, stdio: 'ignore', windowsHide: true });
   fs.writeFileSync(lockFile, String(child.pid || ''));
-  child.on('close', (code) => {
+  child.on('close', (code: any) => {
     try {
       if (code === 0 && fs.existsSync(path.join(cwd, 'graphify-out', 'graph.json'))) {
         fs.copyFileSync(path.join(cwd, 'graphify-out', 'graph.json'), path.join(graphsDir, 'graph.json'));
@@ -1070,17 +1062,17 @@ function maybeTriggerGraphify(event, cwd) {
   });
 }
 
-function writeGraphifyStatus(file, status) {
+function writeGraphifyStatus(file: any, status: any) {
   try { fs.writeFileSync(file, JSON.stringify(status, null, 2) + '\n'); } catch {}
 }
 
-function startConfigWatcher(cwd) {
+function startConfigWatcher(cwd: any) {
   if (configWatchers.length > 0) return;
   const watchedPlanning = { active: false };
-  const watchDir = (dir, isPlanning) => {
+  const watchDir = (dir: any, isPlanning: any) => {
     if (!fs.existsSync(dir)) return;
     try {
-      const watcher = fs.watch(dir, { persistent: false }, (_eventType, filename) => {
+      const watcher = fs.watch(dir, { persistent: false }, (_eventType: any, filename: any) => {
         const name = filename ? String(filename) : '';
         if (!isPlanning && name === '.planning') startPlanningWatcher();
         if (isPlanning && name === 'config.json') scheduleConfigReload(cwd);
@@ -1097,7 +1089,7 @@ function startConfigWatcher(cwd) {
   startPlanningWatcher();
 }
 
-function scheduleConfigReload(cwd) {
+function scheduleConfigReload(cwd: any) {
   if (configReloadTimer) clearTimeout(configReloadTimer);
   configReloadTimer = setTimeout(() => {
     configReloadTimer = null;
@@ -1117,7 +1109,7 @@ function scheduleConfigReload(cwd) {
     if (config.mode) lines.push(`  mode: ${config.mode}`);
     for (const [key, label] of [['hooks', 'hooks'], ['workflow', 'workflow'], ['models', 'models']]) {
       if (config[key] && typeof config[key] === 'object') {
-        const values = Object.entries(config[key]).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${redactConfigValue(k, v)}`).join(', ');
+        const values = Object.entries(config[key]).filter(([, v]: [string, any]) => v !== undefined).map(([k, v]: [string, any]) => `${k}=${redactConfigValue(k, v)}`).join(', ');
         if (values) lines.push(`  ${label}: { ${values} }`);
       }
     }
@@ -1126,9 +1118,7 @@ function scheduleConfigReload(cwd) {
   }, 100);
 }
 
-module.exports = gsdCoreOmpExtension;
-module.exports._test = {
-  toClaudeToolName,
+export const _test = {
   extractToolFilePath,
   extractToolContent,
   stripReadSelector,

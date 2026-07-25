@@ -1,8 +1,7 @@
 {
   "name": "gsd-core-omp-extension",
   "private": true,
-  "type": "commonjs",
   "omp": {
-    "extensions": ["./index.mjs"]
+    "extensions": ["./index.ts"]
   }
 }

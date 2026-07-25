@@ -149,9 +149,9 @@ describe('ci-test-scope.cjs', () => {
   });
 
   test('changed test files are selected directly', () => {
-    const result = scopeFor(['tests/run-tests-harness.test.cjs']);
+    const result = scopeFor(['tests/test-suites.test.cjs']);
     assert.strictEqual(result.code_changed, true);
-    assert.ok(result.targeted_tests.includes('tests/run-tests-harness.test.cjs'));
+    assert.ok(result.targeted_tests.includes('tests/test-suites.test.cjs'));
   });
 
   test('installer-sensitive changes request full matrix and install tests', () => {
@@ -466,7 +466,7 @@ describe('test.yml changes job contract (#837)', () => {
 describe('test-full shard matrix parity (#1212)', () => {
   // DEFECT.GENERATIVE-FIX: the sharded windows full-test lane has TWO surfaces
   // that must agree — the `shard:` matrix array (how many parallel jobs run)
-  // and the `/N` denominator in `run-tests.cjs --suite unit --shard i/N` (how
+  // and the `/N` denominator in `test-suites.cjs --suite unit --shard i/N` (how
   // many slices the runner partitions the suite into). If they diverge (e.g.
   // someone grows `shard: [1,2,3,4]` but leaves `--shard ${{ matrix.shard }}/3`),
   // shards silently overlap and one shard errors out. This parity assertion
@@ -522,9 +522,9 @@ describe('test-full shard matrix parity (#1212)', () => {
 
     // Find the `--shard ${{ matrix.shard }}/<N>` denominator in the unit step.
     const unitStep = job.steps.find(
-      s => typeof s.run === 'string' && s.run.includes('run-tests.cjs') && s.run.includes('--shard'),
+      s => typeof s.run === 'string' && s.run.includes('test-suites.cjs') && s.run.includes('--shard'),
     );
-    assert.ok(unitStep, 'test-full must have a step running run-tests.cjs --shard');
+    assert.ok(unitStep, 'test-full must have a step running test-suites.cjs --shard');
     const m = /--shard\s+\$\{\{\s*matrix\.shard\s*\}\}\/(\d+)/.exec(unitStep.run);
     assert.ok(m, `could not parse --shard i/N denominator from: ${unitStep.run}`);
     const denominator = Number(m[1]);
@@ -691,7 +691,7 @@ const path = require('path');
 
 const { createTempDir, cleanup } = require('./helpers.cjs');
 
-const HARNESS = path.join(__dirname, '..', 'scripts', 'run-tests.cjs');
+const HARNESS = path.join(__dirname, '..', 'scripts', 'test-suites.cjs');
 
 const PASS_BODY = `'use strict';
 const { test } = require('node:test');
@@ -799,11 +799,11 @@ describe('bug #641 — --files-from with bare suite token', () => {
     assert.ok(!r.stderr.includes('c.security.test.cjs'), `c.security.test.cjs must be excluded.\nstderr: ${r.stderr}`);
   });
 
-  test('#408 fallback: ci-test-scope "unit" sentinel does not crash run-tests', () => {
+  test('#408 fallback: ci-test-scope "unit" sentinel does not crash test-suites', () => {
     // This test simulates the end-to-end #408 fallback path:
     // ci-test-scope produces "unit" (the fallback sentinel for "code changed
     // but no rule matched any test"), ci-prepare-test-scope writes it verbatim,
-    // and run-tests must resolve it rather than crash.
+    // and test-suites must resolve it rather than crash.
     seed(tmpDir, ['a.test.cjs', 'b.security.test.cjs']);
     // Simulate what ci-prepare-test-scope writes: "unit\n"
     const listPath = path.join(tmpDir, '.ci-selected-tests.txt');
@@ -825,7 +825,7 @@ describe('bug #641 — --files-from with bare suite token', () => {
 // ci-prepare-test-scope's empty-detection FALLBACK hardcoded an explicit file
 // list that included tests/core.test.cjs — a file deleted in #1291. Every
 // scoped lane (scope=targeted|windows) that hit the fallback wrote the stale
-// path into .ci-selected-tests.txt and crashed run-tests with
+// path into .ci-selected-tests.txt and crashed test-suites with
 // "requested test file(s) not found: core.test.cjs". The fix: existence-filter
 // the fallback at write time, fall back to the 'unit' suite sentinel when
 // nothing survives, and guard the FALLBACK constant against disk reality.

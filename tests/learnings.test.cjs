@@ -7,6 +7,7 @@
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -559,7 +560,7 @@ describe('learnings dedupe scaling (#306)', () => {
 
     // K=2
     fs.writeFileSync(path.join(projectDir2, 'LEARNINGS.md'), makeLearningsMd(2), 'utf-8');
-    const spy2 = t.mock.method(fs, 'readdirSync');
+    const spy2 = mockMethod(t, fs, 'readdirSync');
     const before2 = spy2.mock.calls.length;
     learningsCopyFromProject(projectDir2, { storeDir: storeDir2, sourceProject: 'proj-a' });
     const c1 = spy2.mock.calls.length - before2;
@@ -567,7 +568,7 @@ describe('learnings dedupe scaling (#306)', () => {
 
     // K=6
     fs.writeFileSync(path.join(projectDir6, 'LEARNINGS.md'), makeLearningsMd(6), 'utf-8');
-    const spy6 = t.mock.method(fs, 'readdirSync');
+    const spy6 = mockMethod(t, fs, 'readdirSync');
     const before6 = spy6.mock.calls.length;
     learningsCopyFromProject(projectDir6, { storeDir: storeDir6, sourceProject: 'proj-b' });
     const c6 = spy6.mock.calls.length - before6;

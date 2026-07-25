@@ -11,6 +11,7 @@
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -1829,12 +1830,11 @@ describe('ADR-1244 D2: overlay-aware registry wiring in capability-state', () =>
 // ─── #1459 IC-04: capability-state threads the consent home (GSD_HOME) to loadRegistry ───
 
 describe('#1459 IC-04: capability-state threads gsdHome to the overlay loader', () => {
-  const { mock } = require('node:test');
   const { resolveCapabilityRuntimeState } = require('../gsd-core/bin/lib/capability-state.cjs');
   // The SAME cached loader module instance capability-state requires internally — spy its loadRegistry.
   const loader = require('../gsd-core/bin/lib/capability-loader.cjs');
 
-  test('resolveCapabilityRuntimeState passes gsdHome=process.env.GSD_HOME to EVERY overlay-aware loadRegistry call', () => {
+  test('resolveCapabilityRuntimeState passes gsdHome=process.env.GSD_HOME to EVERY overlay-aware loadRegistry call', (t) => {
     // revert-fails: if ANY consumer reached on this path (capability-state itself, or the federated
     // config-loader it calls via loadConfig) called loadRegistry({ includeInstalled, cwd }) WITHOUT
     // gsdHome (the pre-IC-04 form), that call's captured options.gsdHome would be undefined while
@@ -1846,7 +1846,7 @@ describe('#1459 IC-04: capability-state threads gsdHome to the overlay loader', 
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-state-ic04-cwd-'));
     const prev = process.env.GSD_HOME;
     const calls = [];
-    const spy = mock.method(loader, 'loadRegistry', function (opts) {
+    const spy = mockMethod(t, loader, 'loadRegistry', function (opts) {
       calls.push(opts || {});
       return realRegistry; // a valid registry shape; we only assert on the call options.
     });

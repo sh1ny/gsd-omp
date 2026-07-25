@@ -18,7 +18,7 @@ const fs = require('fs');
 const os = require('node:os');
 const path = require('path');
 const childProcess = require('child_process');
-const { mock } = require('node:test');
+const { mockMethod, mockRaw } = require('./helpers/mock-method.cjs');
 const { createTempProject, cleanup } = require('./helpers.cjs');
 
 const {
@@ -305,6 +305,7 @@ describe('graphify graph_path override — diff & snapshot', () => {
 
 describe('graphify graph_path override — build', () => {
   let tmpDir, planningDir, cfgDir, env;
+  const hookMocks = [];
 
   beforeEach(() => {
     tmpDir = createTempProject();
@@ -317,14 +318,14 @@ describe('graphify graph_path override — build', () => {
     delete process.env.GSD_WORKSTREAM;
     delete process.env.GSD_PROJECT;
     // Mock the graphify subprocess probes so build's pre-flight passes.
-    mock.method(childProcess, 'spawnSync', (_cmd, args) => {
+    hookMocks.push(mockRaw(childProcess, 'spawnSync', (_cmd, args) => {
       if (args && args[0] === '--help') return { status: 0, stdout: 'Usage', stderr: '', error: undefined, signal: null };
       return { status: 0, stdout: '0.4.3\n', stderr: '', error: undefined, signal: null };
-    });
+    }));
   });
 
   afterEach(() => {
-    mock.restoreAll();
+    for (const m of hookMocks.splice(0)) m.mock.restore();
     cleanup(tmpDir);
     cleanup(cfgDir);
     env.restore();

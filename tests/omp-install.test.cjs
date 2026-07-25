@@ -126,7 +126,7 @@ describe('OMP local install and conversion', () => {
     assert.ok(fs.existsSync(path.join(targetDir, 'skills', 'gsd-ns-workflow', 'skills', 'plan-phase', 'SKILL.md')), 'plan-phase must be nested under gsd-ns-workflow');
     assert.ok(fs.existsSync(path.join(targetDir, 'agents', 'gsd-planner.md')));
     assert.ok(fs.existsSync(path.join(targetDir, 'rules', 'gsd-planning-artifacts.md')));
-    assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.js')));
+    assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.ts')));
     assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'package.json')));
     assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'update-worker.js')));
 
@@ -141,7 +141,7 @@ describe('OMP local install and conversion', () => {
     assert.ok(Object.keys(manifest.files).some(file => file.startsWith('skills/gsd-ns-workflow/skills/plan-phase/SKILL.md')));
     assert.ok(Object.keys(manifest.files).some(file => file.startsWith('agents/gsd-planner.md')));
     assert.ok(Object.keys(manifest.files).some(file => file.startsWith('rules/gsd-planning-artifacts.md')));
-    assert.ok(Object.keys(manifest.files).includes('extensions/gsd-core/index.js'));
+    assert.ok(Object.keys(manifest.files).includes('extensions/gsd-core/index.ts'));
     assert.ok(Object.keys(manifest.files).every(file => !file.startsWith('hooks/')));
 
     assert.match(captured.stdout, /OMP readiness: target=\.[/\\]\.omp/);
@@ -214,7 +214,7 @@ describe('OMP local install and conversion', () => {
     assert.ok(fs.existsSync(path.join(targetDir, 'agents', 'user-agent.md')));
     assert.ok(fs.existsSync(path.join(targetDir, 'rules', 'user-rule.md')));
     assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'user-extension', 'index.js')));
-    assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.js')));
+    assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.ts')));
 
     uninstall(false, 'omp');
     assert.ok(fs.existsSync(path.join(targetDir, 'commands', 'user-command.md')));
@@ -223,7 +223,7 @@ describe('OMP local install and conversion', () => {
     assert.ok(fs.existsSync(path.join(targetDir, 'rules', 'user-rule.md')));
     assert.ok(!fs.existsSync(path.join(targetDir, 'rules', 'planning-artifacts.md')));
     assert.ok(fs.existsSync(path.join(targetDir, 'extensions', 'user-extension', 'index.js')));
-    assert.ok(!fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.js')));
+    assert.ok(!fs.existsSync(path.join(targetDir, 'extensions', 'gsd-core', 'index.ts')));
     assert.ok(!fs.existsSync(path.join(targetDir, 'commands', 'gsd-help.md')));
   });
 
@@ -249,7 +249,7 @@ describe('OMP local install and conversion', () => {
     assert.ok(keys.some(file => file.startsWith('commands/gsd-help.md')));
     assert.ok(keys.some(file => file.startsWith('skills/gsd-ns-workflow/skills/plan-phase/SKILL.md')), 'manifest must track nested plan-phase skill');
     assert.ok(keys.some(file => file.startsWith('rules/gsd-planning-artifacts.md')));
-    assert.ok(keys.includes('extensions/gsd-core/index.js'));
+    assert.ok(keys.includes('extensions/gsd-core/index.ts'));
     assert.ok(keys.includes('extensions/gsd-core/package.json'));
     assert.ok(keys.includes('extensions/gsd-core/update-worker.js'));
     assert.ok(keys.every(file => file !== 'rules/user-rule.md'));
@@ -307,7 +307,7 @@ describe('OMP global install', () => {
     assert.ok(fs.existsSync(path.join(target, 'commands', 'gsd-help.md')));
     assert.ok(fs.existsSync(path.join(target, 'skills', 'gsd-ns-workflow', 'skills', 'plan-phase', 'SKILL.md')));
     assert.ok(fs.existsSync(path.join(target, 'agents', 'gsd-planner.md')));
-    assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'index.js')));
+    assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'index.ts')));
     assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'package.json')));
     assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'update-worker.js')));
     const command = fs.readFileSync(path.join(target, 'commands', 'gsd-help.md'), 'utf8').replace(/\\/g, '/');
@@ -336,7 +336,7 @@ describe('OMP global install', () => {
     const home = path.join(tmpDir, 'home');
     const target = path.join(home, '.omp', 'profiles', 'work', 'agent');
     runInstallerCli(tmpDir, ['--global', '--omp'], { HOME: home, USERPROFILE: home, OMP_PROFILE: 'work' });
-    assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'index.js')));
+    assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'index.ts')));
     assert.ok(fs.existsSync(path.join(target, 'extensions', 'gsd-core', 'package.json')));
   });
 });

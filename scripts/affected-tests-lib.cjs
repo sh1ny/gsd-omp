@@ -5,13 +5,13 @@ const { readdirSync, readFileSync, existsSync } = require('node:fs');
 const path = require('node:path');
 
 const { ExitError } = require('./lib/cli-exit.cjs');
-const { suiteOf } = require('./run-tests.cjs');
+const { suiteOf } = require('./test-suites.cjs');
 
 const CRITICAL_PATHS = [
   '.github/workflows/',
   'package.json',
   'package-lock.json',
-  'scripts/run-tests.cjs',
+  'scripts/test-suites.cjs',
   'scripts/affected-tests-lib.cjs',
   'scripts/run-affected-tests.cjs',
 ];
@@ -411,7 +411,7 @@ function runNodeTestFiles(repoRoot, files) {
       console.error(`affected-tests: chunk ${i + 1}/${chunks.length} (${chunks[i].length} files)`);
     }
     try {
-      execFileSync(process.execPath, ['--test', concurrency, ...chunks[i]], {
+      execFileSync(process.platform === 'win32' ? 'bun.exe' : 'bun', ['test', ...chunks[i]], {
         cwd: repoRoot,
         stdio: 'inherit',
         env: { ...process.env },
@@ -425,7 +425,7 @@ function runNodeTestFiles(repoRoot, files) {
 }
 
 function runSuite(repoRoot, suite) {
-  execFileSync(process.execPath, ['scripts/run-tests.cjs', '--suite', suite], {
+  execFileSync(process.execPath, ['scripts/test-suites.cjs', '--suite', suite], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: { ...process.env },

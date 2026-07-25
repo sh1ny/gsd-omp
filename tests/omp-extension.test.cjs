@@ -6,7 +6,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const extension = require('../gsd-core/omp/extensions/gsd-core/index.js');
+const extensionModule = require('../gsd-core/omp/extensions/gsd-core/index.ts');
+const extension = extensionModule.default;
 const { install } = require('../bin/install.js');
 const { createTempDir, cleanup, captureConsole } = require('./helpers.cjs');
 
@@ -170,9 +171,9 @@ describe('OMP extension', () => {
   });
 
   test('redacts sensitive config values', () => {
-    assert.strictEqual(extension._test.redactConfigValue('api_key', 'abc'), '[REDACTED]');
-    assert.strictEqual(extension._test.redactConfigValue('token', 'abc'), '[REDACTED]');
-    assert.strictEqual(extension._test.redactConfigValue('community', true), true);
+    assert.strictEqual(extensionModule._test.redactConfigValue('api_key', 'abc'), '[REDACTED]');
+    assert.strictEqual(extensionModule._test.redactConfigValue('token', 'abc'), '[REDACTED]');
+    assert.strictEqual(extensionModule._test.redactConfigValue('community', true), true);
   });
 
   test('queues critical context warning from OMP context usage', (t) => {
@@ -190,7 +191,7 @@ describe('OMP extension', () => {
   });
 
   test('builds update banner output', () => {
-    const text = extension._test.buildUpdateBannerOutput({
+    const text = extensionModule._test.buildUpdateBannerOutput({
       cache: {
         package_name: '@opengsd/gsd-core',
         update_available: true,
@@ -214,8 +215,8 @@ describe('OMP extension', () => {
     process.chdir(tmpDir);
 
     captureConsole(() => install(false, 'omp'));
-    const installed = require(path.join(tmpDir, '.omp', 'extensions', 'gsd-core', 'index.js'));
-    const { handlers, capturedLabel } = registerExtension(installed);
+    const installedModule = require(path.join(tmpDir, '.omp', 'extensions', 'gsd-core', 'index.ts'));
+    const { handlers, capturedLabel } = registerExtension(installedModule.default);
 
     assert.strictEqual(capturedLabel, 'GSD Core');
     for (const event of ['session_start', 'tool_call', 'tool_result', 'turn_end', 'context', 'session_shutdown']) {
@@ -238,7 +239,7 @@ describe('OMP extension', () => {
     flushContext(handlers);
     handlers.get('turn_end')({ type: 'turn_end' }, ctx);
 
-    const installCall = setWidgetCalls.find((c) => c[0] === extension._test.STATUS_WIDGET_KEY);
+    const installCall = setWidgetCalls.find((c) => c[0] === extensionModule._test.STATUS_WIDGET_KEY);
     assert.ok(installCall, 'setWidget called with gsd-status key');
     assert.strictEqual(typeof installCall[1], 'function', 'second arg is a factory function');
 
@@ -254,13 +255,13 @@ describe('OMP extension', () => {
     const width = 40;
     const lines = component.render(width);
     assert.strictEqual(lines.length, 1, 'renders exactly one line');
-    const visible = extension._test.visibleWidthApprox(extension._test.stripAnsi(lines[0]));
+    const visible = extensionModule._test.visibleWidthApprox(extensionModule._test.stripAnsi(lines[0]));
     assert.strictEqual(visible, width, 'line is right-aligned to full width');
-    assert.ok(extension._test.stripAnsi(lines[0]).endsWith('6%'), 'line ends with the ctx percentage');
+    assert.ok(extensionModule._test.stripAnsi(lines[0]).endsWith('6%'), 'line ends with the ctx percentage');
   });
 
   test('status widget nerd icon and threshold colors', () => {
-    const { formatStatusSegments } = extension._test;
+    const { formatStatusSegments } = extensionModule._test;
     const nerdTheme = {
       symbol: (k) => ({ 'icon.context': '\ue70f' })[k],
       fg: (c, text) => `<${c}>${text}</>`,
@@ -277,7 +278,7 @@ describe('OMP extension', () => {
   });
 
   test('status widget update segment uses hyphen form', () => {
-    const { formatStatusSegments } = extension._test;
+    const { formatStatusSegments } = extensionModule._test;
     const segments = formatStatusSegments({ showUpdate: true, state: {}, pct: null }, null);
     assert.ok(segments.length >= 1, 'update segment present');
     const updateSeg = segments.find((s) => s.plain.includes('/gsd-update'));
@@ -301,8 +302,8 @@ describe('OMP extension', () => {
     flushContext(handlers);
     handlers.get('turn_end')({ type: 'turn_end' }, ctx);
 
-    const cleared = setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && c[1] === undefined);
-    const notInstalled = !setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && typeof c[1] === 'function');
+    const cleared = setWidgetCalls.some((c) => c[0] === extensionModule._test.STATUS_WIDGET_KEY && c[1] === undefined);
+    const notInstalled = !setWidgetCalls.some((c) => c[0] === extensionModule._test.STATUS_WIDGET_KEY && typeof c[1] === 'function');
     assert.ok(cleared || notInstalled, 'widget cleared or never installed when no content');
   });
 
@@ -343,7 +344,7 @@ describe('OMP extension', () => {
     setWidgetCalls.length = 0;
     handlers.get('session_shutdown')({ type: 'session_shutdown' }, ctx);
 
-    const cleared = setWidgetCalls.some((c) => c[0] === extension._test.STATUS_WIDGET_KEY && c[1] === undefined);
+    const cleared = setWidgetCalls.some((c) => c[0] === extensionModule._test.STATUS_WIDGET_KEY && c[1] === undefined);
     assert.ok(cleared, 'widget cleared on session_shutdown');
   });
 });

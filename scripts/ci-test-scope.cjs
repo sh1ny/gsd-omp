@@ -87,10 +87,10 @@ const RULES = [
   },
   {
     name: 'test harness',
-    match: path => path === 'scripts/run-tests.cjs',
+    match: path => path === 'scripts/test-suites.cjs',
     fullMatrix: true,
     tests: [
-      'tests/run-tests-harness.test.cjs',
+      'tests/test-suites.test.cjs',
       'tests/workflow-shell-pinning.test.cjs',
     ],
   },

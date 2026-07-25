@@ -14,6 +14,7 @@
 const { test, describe, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const { mockMethod } = require('./helpers/mock-method.cjs');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -342,7 +343,7 @@ describe('bug #1008: io.output() tolerates a full / slow non-blocking pipe', () 
   test('retries on EAGAIN and emits the full payload without throwing', (t) => {
     const written = [];
     let calls = 0;
-    t.mock.method(fs, 'writeSync', (fd, data, offset, length) => {
+    mockMethod(t, fs, 'writeSync', (fd, data, offset, length) => {
       calls += 1;
       if (calls === 1) throw bug1008WriteError('EAGAIN', -11); // pipe momentarily full
       const chunk = bug1008ChunkOf(data, offset, length);
@@ -359,7 +360,7 @@ describe('bug #1008: io.output() tolerates a full / slow non-blocking pipe', () 
   test('retries on EINTR (signal-interrupted write) too', (t) => {
     const written = [];
     let calls = 0;
-    t.mock.method(fs, 'writeSync', (fd, data, offset, length) => {
+    mockMethod(t, fs, 'writeSync', (fd, data, offset, length) => {
       calls += 1;
       if (calls === 1) throw bug1008WriteError('EINTR', -4);
       const chunk = bug1008ChunkOf(data, offset, length);
@@ -374,7 +375,7 @@ describe('bug #1008: io.output() tolerates a full / slow non-blocking pipe', () 
   test('handles short (partial) writes without truncating', (t) => {
     const written = [];
     const CAP = 3; // each writeSync accepts at most 3 bytes, like a draining pipe
-    t.mock.method(fs, 'writeSync', (fd, data, offset, length) => {
+    mockMethod(t, fs, 'writeSync', (fd, data, offset, length) => {
       const chunk = bug1008ChunkOf(data, offset, length);
       const part = chunk.slice(0, CAP);
       written.push(part);
@@ -387,7 +388,7 @@ describe('bug #1008: io.output() tolerates a full / slow non-blocking pipe', () 
   });
 
   test('does NOT swallow a genuine, non-transient write error (EPIPE)', (t) => {
-    t.mock.method(fs, 'writeSync', () => { throw bug1008WriteError('EPIPE', -32); });
+    mockMethod(t, fs, 'writeSync', () => { throw bug1008WriteError('EPIPE', -32); });
     assert.throws(
       () => io.output({ ok: true }, false),
       (err) => err.code === 'EPIPE',
@@ -401,8 +402,8 @@ describe('bug #1008: io.error() tolerates a full non-blocking stderr pipe', () =
     const written = [];
     let calls = 0;
     let exitCode = null;
-    t.mock.method(process, 'exit', (code) => { exitCode = code; }); // neutralize the hard exit
-    t.mock.method(fs, 'writeSync', (fd, data, offset, length) => {
+    mockMethod(t, process, 'exit', (code) => { exitCode = code; }); // neutralize the hard exit
+    mockMethod(t, fs, 'writeSync', (fd, data, offset, length) => {
       calls += 1;
       if (calls === 1) throw bug1008WriteError('EAGAIN', -11);
       assert.equal(fd, 2, 'error() must write to stderr');
