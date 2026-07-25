@@ -26,6 +26,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GSD fork restricted to OMP-only runtime. Removed 19 non-OMP runtime capability descriptors (claude, codex, opencode, pi, cursor, windsurf, kilo, kimi, kimi-code, antigravity, augment, cline, codebuddy, copilot, hermes, qwen, trae, vscode, zcode) and the claude-orchestration feature capability. Deleted gsd-mcp-server, hooks tree, generated skills artifact, and per-harness packaging directories (.claude-plugin, .opencode, .kilo, pi, vscode)
 - Hardened runtime selection: explicit non-omp values via `GSD_RUNTIME`, `.planning/config.json` runtime field, or removed `--<runtime>` CLI flags now hard-error with `this GSD fork supports OMP only`; omitted values default to `omp`. Migration: reinstall with `gsd-core --omp`
 
+### Fixed
+
+- Status widget now falls back to `current_phase` when `active_phase` is absent, matching canonical STATE.md files written by GSD's state engine
+- Status widget now parses `Phase: NN (name)` body format (with or without `of M`) instead of only matching when `of M` is present
+
 ## [1.8.0] - 2026-07-22
 
 ### Added

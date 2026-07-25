@@ -609,6 +609,12 @@ function parseStateMd(content: any) {
       if (key === 'milestone') state.milestone = value === 'null' ? null : value;
       if (key === 'milestone_name') state.milestoneName = value === 'null' ? null : value;
       if (key === 'active_phase') state.activePhase = (value === 'null' || value === '') ? null : value;
+      // Canonical steady-state phase keys (written by src/state.cts syncStateFrontmatter).
+      // active_phase (above) is the transient in-flight orchestrator field; current_phase
+      // is what STATE.md actually carries in the normal case. formatStatusSegments falls
+      // back to currentPhase when activePhase is absent.
+      if (key === 'current_phase') state.currentPhase = (value === 'null' || value === '') ? null : value;
+      if (key === 'current_phase_name') state.currentPhaseName = (value === 'null' || value === '') ? null : value;
       if (key === 'next_action') state.nextAction = (value === 'null' || value === '') ? null : value;
     }
     const npFlowMatch = fm.match(/^next_phases:\s*\[([^\]]*)\]/m);
@@ -632,10 +638,15 @@ function parseStateMd(content: any) {
       if (pc) state.percent = pc[1];
     }
   }
-  const phaseMatch = String(content || '').match(/^Phase:\s*(\d+)\s+of\s+(\d+)(?:\s+\(([^)]+)\))?/m);
+  // Primary form: "Phase: N of M (name)" — written by gsd2-import / state-transition sync.
+  // Fallback form: "Phase: NN (name) — STATUS" — written by beginPhase/completePhase and
+  // by hand-authored STATE.md (e.g. mythspine). The old regex required the literal "of M"
+  // token and silently missed both fallback shapes, leaving phaseNum unset and the
+  // status widget without a phase segment.
+  const phaseMatch = String(content || '').match(/^Phase:\s*(\d+)(?:\s+of\s+(\d+))?(?:\s+\(([^)]+)\))?/m);
   if (phaseMatch) {
     state.phaseNum = phaseMatch[1];
-    state.phaseTotal = phaseMatch[2];
+    state.phaseTotal = phaseMatch[2] || null;
     state.phaseName = phaseMatch[3] || null;
   }
   if (!state.status) {
@@ -687,14 +698,16 @@ function formatStatusSegments(model: any, theme: any) {
       const pctStr = (state.percent != null && Number.isFinite(Number(state.percent)))
         ? ` · ${Number(state.percent)}%`
         : '';
-      const plain = icon ? `${icon} ${milestone}${pctStr}` : `${milestone}${pctStr}`;
-      segments.push({ plain, styled: themeFg(theme, 'muted', plain) });
-      if (state.activePhase) {
-        const phaseText = `P${state.activePhase}${state.status ? ` ${state.status}` : ''}`;
+      const msPlain = icon ? `${icon} ${milestone}${pctStr}` : `${milestone}${pctStr}`;
+      segments.push({ plain: msPlain, styled: themeFg(theme, 'muted', msPlain) });
+      if (state.activePhase || state.currentPhase) {
+        const ph = state.activePhase || state.currentPhase;
+        const phaseText = `P${ph}${state.status ? ` ${state.status}` : ''}`;
         segments.push({ plain: phaseText, styled: themeFg(theme, 'muted', phaseText) });
       }
-    } else if (state.activePhase) {
-      const phaseText = `P${state.activePhase}${state.status ? ` ${state.status}` : ''}`;
+    } else if (state.activePhase || state.currentPhase) {
+      const ph = state.activePhase || state.currentPhase;
+      const phaseText = `P${ph}${state.status ? ` ${state.status}` : ''}`;
       segments.push({ plain: phaseText, styled: themeFg(theme, 'muted', phaseText) });
     } else if (state.nextAction && state.nextPhases && state.nextPhases.length > 0) {
       const phasesStr = state.nextPhases.join('/');
@@ -1135,6 +1148,7 @@ export const _test = {
   buildStatusModel,
   createStatusComponent,
   formatStatusSegments,
+  parseStateMd,
   visibleWidthApprox,
   stripAnsi,
   STATUS_WIDGET_KEY,

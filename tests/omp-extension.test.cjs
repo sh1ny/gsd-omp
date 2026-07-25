@@ -286,6 +286,53 @@ describe('OMP extension', () => {
     assert.ok(!segments.some((s) => s.plain.includes('/gsd:update')), 'no colon form');
   });
 
+
+  test('status widget renders phase from current_phase (canonical STATE.md key)', () => {
+    const { parseStateMd, formatStatusSegments } = extensionModule._test;
+    // STATE.md written by GSD's state engine uses current_phase (not active_phase).
+    const md = [
+      '---',
+      'milestone: v1.0',
+      'milestone_name: milestone',
+      'current_phase: 01',
+      'current_phase_name: local-project-bootstrap',
+      'status: executing',
+      'progress:',
+      '  total_phases: 1',
+      '  completed_phases: 0',
+      '---',
+      '',
+      'Phase: 01 (local-project-bootstrap) — EXECUTING',
+    ].join('\n');
+    const state = parseStateMd(md);
+    assert.strictEqual(state.currentPhase, '01', 'parseStateMd reads current_phase');
+    assert.strictEqual(state.activePhase, undefined, 'active_phase absent as expected');
+
+    const segments = formatStatusSegments({ showUpdate: false, state, pct: 31 }, null);
+    const phaseSeg = segments.find((s) => /^P0/.test(s.plain));
+    assert.ok(phaseSeg, 'phase segment present from current_phase fallback');
+    assert.strictEqual(phaseSeg.plain, 'P01 executing', 'phase text uses current_phase + status');
+    // Milestone segment still present alongside the phase.
+    const milestoneSeg = segments.find((s) => s.plain.includes('v1.0'));
+    assert.ok(milestoneSeg, 'milestone segment still present');
+  });
+
+  test('status widget falls back to body Phase: NN (name) when frontmatter lacks phase', () => {
+    const { parseStateMd, formatStatusSegments } = extensionModule._test;
+    const md = [
+      '---',
+      'milestone: v1.0',
+      'status: executing',
+      '---',
+      '',
+      'Phase: 01 (local-project-bootstrap) — EXECUTING',
+    ].join('\n');
+    const state = parseStateMd(md);
+    assert.strictEqual(state.phaseNum, '01', 'body Phase: NN (name) sets phaseNum');
+    assert.strictEqual(state.phaseTotal, null, 'no "of M" → phaseTotal null');
+    assert.strictEqual(state.phaseName, 'local-project-bootstrap', 'captures parenthetical name');
+  });
+
   test('status widget hides when no content', (t) => {
     const tmpDir = createTempDir('gsd-omp-widget-empty-');
     t.after(() => cleanup(tmpDir));
